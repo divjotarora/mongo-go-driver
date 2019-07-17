@@ -73,6 +73,7 @@ type T struct {
 	mockResponses []bson.D
 	createdColls []*mongo.Collection // collections created in this test
 	dbName, collName string
+	failPointNames []string
 
 	// options copied to sub-tests
 	clientType   ClientType
@@ -201,6 +202,7 @@ func (t *T) RunOpts(name string, opts *Options, callback func(*T)) {
 		}
 
 		callback(sub)
+		t.ClearFailPoints()
 	})
 }
 
@@ -284,7 +286,7 @@ func (t *T) CreateCollection(name string, opts ...*options.CollectionOptions) *m
 }
 
 // SetFailPoint sets a fail point for the client associated with T. Commands to create the failpoint will appear
-// in command monitoring channels.
+// in command monitoring channels. The fail point will automatically be disabled after this test has run.
 func (t *T) SetFailPoint(fp FailPoint) {
 	// ensure mode fields are int32
 	if modeMap, ok := fp.Mode.(map[string]interface{}); ok {
@@ -308,6 +310,22 @@ func (t *T) SetFailPoint(fp FailPoint) {
 	admin := t.Client.Database("admin")
 	if err := admin.RunCommand(Background, fp).Err(); err != nil {
 		t.Fatalf("error creating fail point on server: %v", err)
+	}
+	t.failPointNames = append(t.failPointNames, fp.ConfigureFailPoint)
+}
+
+// ClearFailPoints disables all previously set failpoints for this test.
+func (t *T) ClearFailPoints() {
+	db := t.Client.Database("admin")
+	for _, fp := range t.failPointNames {
+		cmd := bson.D{
+			{"configureFailPoint", fp},
+			{"mode", "off"},
+		}
+		err := db.RunCommand(Background, cmd).Err()
+		if err != nil {
+			t.Fatalf("error clearing fail point %s: %v", fp, err)
+		}
 	}
 }
 
