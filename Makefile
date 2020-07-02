@@ -157,6 +157,20 @@ evg-test-atlas-data-lake:
 	ATLAS_DATA_LAKE_INTEGRATION_TEST=true go test -v ./mongo/integration -run TestUnifiedSpecs/atlas-data-lake-testing >> spec_test.suite
 	ATLAS_DATA_LAKE_INTEGRATION_TEST=true go test -v ./mongo/integration -run TestAtlasDataLake >> spec_test.suite
 
+.PHONY: bson-benchmarks
+bson-benchmarks:
+	for number in 1 2 3 4 5 6 7 8 9 10; do \
+		cd ${BSON_BENCHMARKS}; \
+		go test -mod=vendor -bench=. >> driver.bench; \
+	done
+
+.PHONY: bson-benchmarks-mgo
+bson-benchmarks-mgo:
+	for number in 1 2 3 4 5 6 7 8 9 10; do \
+		cd ${BSON_BENCHMARKS}; \
+		go test -mod=vendor -bench=. -tags mgo >> mgo.bench; \
+	done
+
 # benchmark specific targets and support
 perf:driver-test-data.tar.gz
 	tar -zxf $< $(if $(eq $(UNAME_S),Darwin),-s , --transform=s)/data/perf/

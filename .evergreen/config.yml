@@ -50,6 +50,7 @@ functions:
           export DRIVERS_TOOLS="$(pwd)/../drivers-tools"
           export PROJECT_DIRECTORY="$(pwd)"
           export GOCACHE="$(pwd)/.cache"
+          export BSON_BENCHMARKS="$(pwd)/bson-benchmarks"
 
           # Python has cygwin path problems on Windows. Detect prospective mongo-orchestration home directory
           if [ "Windows_NT" = "$OS" ]; then # Magic variable in cygwin
@@ -88,6 +89,7 @@ functions:
           cat <<EOT > expansion.yml
           CURRENT_VERSION: "$CURRENT_VERSION"
           DRIVERS_TOOLS: "$DRIVERS_TOOLS"
+          BSON_BENCHMARKS: "$BSON_BENCHMARKS"
           MONGO_ORCHESTRATION_HOME: "$MONGO_ORCHESTRATION_HOME"
           MONGODB_BINARIES: "$MONGODB_BINARIES"
           UPLOAD_BUCKET: "$UPLOAD_BUCKET"
@@ -99,6 +101,7 @@ functions:
              export GOROOT="${GO_DIST}"
              export GOCACHE="$GOCACHE"
              export DRIVERS_TOOLS="$DRIVERS_TOOLS"
+             export BSON_BENCHMARKS="$BSON_BENCHMARKS"
              export MONGO_ORCHESTRATION_HOME="$MONGO_ORCHESTRATION_HOME"
              export MONGODB_BINARIES="$MONGODB_BINARIES"
              export UPLOAD_BUCKET="$UPLOAD_BUCKET"
@@ -129,6 +132,16 @@ functions:
             git clone git://github.com/mongodb-labs/drivers-evergreen-tools.git $DRIVERS_TOOLS
           fi
           echo "{ \"releases\": { \"default\": \"$MONGODB_BINARIES\" }}" > $MONGO_ORCHESTRATION_HOME/orchestration.config
+    - command: shell.exec
+      params:
+        working_dir: src/go.mongodb.org/mongo-driver
+        script: |
+          ${PREPARE_SHELL}
+          rm -rf $BSON_BENCHMARKS
+          git clone git://github.com/divjotarora/bson-benchmarks.git
+          cd bson-benchmarks
+          git checkout nonlocal-gomod
+          cd ..
     - command: shell.exec
       params:
         working_dir: src/go.mongodb.org/mongo-driver
@@ -269,6 +282,26 @@ functions:
         script: |
           ${PREPARE_SHELL}
           ${BUILD_ENV|} make ${targets} BUILD_TAGS="-tags \"cse gssapi\""
+  
+  run-bson-benchmarks:
+    - command: shell.exec
+      type: test
+      params:
+        working_dir: src/go.mongodb.org/mongo-driver
+        script: |
+          ${PREPARE_SHELL}
+          BSON_BENCHMARKS=${BSON_BENCHMARKS} \
+          make bson-benchmarks
+
+  run-bson-benchmarks-mgo:
+    - command: shell.exec
+      type: test
+      params:
+        working_dir: src/go.mongodb.org/mongo-driver
+        script: |
+          ${PREPARE_SHELL}
+          BSON_BENCHMARKS=${BSON_BENCHMARKS} \
+          make bson-benchmarks-mgo
 
   run-tests:
     - command: shell.exec
@@ -305,6 +338,42 @@ functions:
       params:
         name: perf
         file: src/go.mongodb.org/mongo-driver/perf.json
+
+  send-bson-perf-data:
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: src/go.mongodb.org/mongo-driver/bson-benchmarks/driver.bench
+        remote_file: ${UPLOAD_BUCKET}/${build_variant}/${revision}/${version_id}/${build_id}/bson-benchmarks/${task_id}-${execution}-driver.bench
+        bucket: mciuploads
+        permissions: public-read
+        content_type: text/plain
+        display_name: "driver.bench"
+
+  send-bson-perf-data-mgo:
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: src/go.mongodb.org/mongo-driver/bson-benchmarks/mgo.bench
+        remote_file: ${UPLOAD_BUCKET}/${build_variant}/${revision}/${version_id}/${build_id}/bson-benchmarks/${task_id}-${execution}-mgo.bench
+        bucket: mciuploads
+        permissions: public-read
+        content_type: text/plain
+        display_name: "mgo.bench"
+
+  send-bson-perf-gomod:
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        local_file: src/go.mongodb.org/mongo-driver/bson-benchmarks/go.mod
+        remote_file: ${UPLOAD_BUCKET}/${build_variant}/${revision}/${version_id}/${build_id}/bson-benchmarks/${task_id}-${execution}-go.mod
+        bucket: mciuploads
+        permissions: public-read
+        content_type: text/plain
+        display_name: "go.mod"
 
   run-enterprise-auth-tests:
     - command: shell.exec
@@ -518,7 +587,7 @@ functions:
           cd ${DRIVERS_TOOLS}/.evergreen/ocsp
 
           ./venv/${VENV_BIN_DIR|bin}/python ocsp_mock.py \
-          --ca_file ${OCSP_ALGORITHM}/ca.pem \
+          Benchmark--ca_file ${OCSP_ALGORITHM}/ca.pem \
           --ocsp_responder_cert ${OCSP_ALGORITHM}/ocsp-responder.crt \
           --ocsp_responder_key ${OCSP_ALGORITHM}/ocsp-responder.key \
           -p 8100 \
@@ -788,6 +857,22 @@ tasks:
         vars:
           targets: driver-benchmark
       - func: send-perf-data
+  
+  - name: bson-perf
+    tags: ["bson-performance"]
+    exec_timeout_secs: 7200
+    commands:
+      - func: run-bson-benchmarks
+      - func: send-bson-perf-data
+      - func: send-bson-perf-gomod
+  
+  - name: bson-perf-mgo
+    tags: ["bson-performance"]
+    exec_timeout_secs: 7200
+    commands:
+      - func: run-bson-benchmarks-mgo
+      - func: send-bson-perf-data-mgo
+      - func: send-bson-perf-gomod
 
   - name: sa-build-examples
     tags: ["static-analysis"]
@@ -1639,6 +1724,15 @@ buildvariants:
       GO_DIST: "/opt/golang/go1.13"
     tasks:
       - name: ".performance"
+    
+  - name: bson-perf
+    display_name: "BSON Performance"
+    run_on:
+      - centos6-perf
+    expansions:
+      GO_DIST: "/opt/golang/go1.14"
+    tasks:
+      - name: ".bson-performance"
 
   - name: build-check
     display_name: "Compile Only Checks"
