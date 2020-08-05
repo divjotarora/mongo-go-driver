@@ -6,36 +6,68 @@
 
 package internal
 
-import "context"
+import (
+	"context"
+)
 
 // CancellationListener listens for context cancellation in a loop until the context expires or the listener is aborted.
 type CancellationListener struct {
-	done chan struct{}
+	ctxChan     chan context.Context
+	stopCurrent chan struct{}
+	stopAll     chan struct{}
+	abortFn     func()
 }
 
 // NewCancellationListener constructs a CancellationListener.
-func NewCancellationListener() *CancellationListener {
+func NewCancellationListener(abortFn func()) *CancellationListener {
 	return &CancellationListener{
-		done: make(chan struct{}),
+		ctxChan:     make(chan context.Context, 1),
+		stopCurrent: make(chan struct{}),
+		stopAll:     make(chan struct{}),
+		abortFn:     abortFn,
 	}
 }
 
-// Listen loops until the provided context is cancelled or listening is aborted via the StopListening function. If this
-// detects that the context has been cancelled (i.e. ctx.Err() == context.Canceled), the provided callback is called to
-// abort in-progress work. Even if the context expires, this function will block until StopListening is called.
-func (c *CancellationListener) Listen(ctx context.Context, abortFn func()) {
-	select {
-	case <-ctx.Done():
-		if ctx.Err() == context.Canceled {
-			abortFn()
+// Run starts a persistent loop which waits for new contexts to be provided via AddContext. For each context, it waits
+// until the context expires or the listener is aborted.
+func (c *CancellationListener) Run() {
+	for {
+		// Wait until a new context is available or the listener is exiting.
+		var ctx context.Context
+		select {
+		case ctx = <-c.ctxChan:
+		case <-c.stopAll:
+			return
 		}
 
-		<-c.done
-	case <-c.done:
+		// We don't listen for c.stopAll here because AbortCurrentContext can race with Exit. If they're called at the
+		// same time and the stopAll case is selected, we'll exit the routine and AbortCurrentContext will hang forever
+		// waiting for stopCurrent to be read.
+		select {
+		case <-ctx.Done():
+			if ctx.Err() == context.Canceled {
+				c.abortFn()
+			}
+
+			<-c.stopCurrent
+		case <-c.stopCurrent:
+		}
 	}
 }
 
-// StopListening stops the in-progress Listen call. This function will block if there is no in-progress Listen call.
-func (c *CancellationListener) StopListening() {
-	c.done <- struct{}{}
+// AddContext provides a new context to wait listener. The listener will loop until the context expires,
+// AbortCurrentContext is called, or Exit is called.
+func (c *CancellationListener) AddContext(ctx context.Context) {
+	c.ctxChan <- ctx
+}
+
+// AbortCurrentContext forces the listener to stop listening to the last provided context. This function must only be
+// called after AddContext.
+func (c *CancellationListener) AbortCurrentContext() {
+	c.stopCurrent <- struct{}{}
+}
+
+// Exit signals the routine to stop waiting for new contexts.
+func (c *CancellationListener) Exit() {
+	c.stopAll <- struct{}{}
 }

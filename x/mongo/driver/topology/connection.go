@@ -78,17 +78,17 @@ func newConnection(addr address.Address, opts ...ConnectionOption) (*connection,
 	id := fmt.Sprintf("%s[-%d]", addr, nextConnectionID())
 
 	c := &connection{
-		id:                   id,
-		addr:                 addr,
-		idleTimeout:          cfg.idleTimeout,
-		lifetimeDeadline:     lifetimeDeadline,
-		readTimeout:          cfg.readTimeout,
-		writeTimeout:         cfg.writeTimeout,
-		connectDone:          make(chan struct{}),
-		config:               cfg,
-		connectContextMade:   make(chan struct{}),
-		cancellationListener: internal.NewCancellationListener(),
+		id:                 id,
+		addr:               addr,
+		idleTimeout:        cfg.idleTimeout,
+		lifetimeDeadline:   lifetimeDeadline,
+		readTimeout:        cfg.readTimeout,
+		writeTimeout:       cfg.writeTimeout,
+		connectDone:        make(chan struct{}),
+		config:             cfg,
+		connectContextMade: make(chan struct{}),
 	}
+	c.cancellationListener = internal.NewCancellationListener(c.cancellationListenerCallback)
 	atomic.StoreInt32(&c.connected, initialized)
 
 	return c, nil
@@ -161,6 +161,9 @@ func (c *connection) connect(ctx context.Context) {
 	}
 
 	c.bumpIdleDeadline()
+
+	// Start the cancellation listener because it will be required by commands sent during the handshake.
+	go c.cancellationListener.Run()
 
 	// running isMaster and authentication is handled by a handshaker on the configuration instance.
 	handshaker := c.config.handshaker
@@ -285,9 +288,9 @@ func (c *connection) writeWireMessage(ctx context.Context, wm []byte) error {
 		return ConnectionError{ConnectionID: c.id, Wrapped: err, message: "failed to set write deadline"}
 	}
 
-	go c.cancellationListener.Listen(ctx, c.cancellationListenerCallback)
+	c.cancellationListener.AddContext(ctx)
 	_, err = c.nc.Write(wm)
-	c.cancellationListener.StopListening()
+	c.cancellationListener.AbortCurrentContext()
 	if err != nil {
 		c.close()
 		return ConnectionError{
@@ -334,13 +337,14 @@ func (c *connection) readWireMessage(ctx context.Context, dst []byte) ([]byte, e
 	// reslice dst once instead of twice.
 	var sizeBuf [4]byte
 
-	go c.cancellationListener.Listen(ctx, c.cancellationListenerCallback)
+	c.cancellationListener.AddContext(ctx)
 	// We do a ReadFull into an array here instead of doing an opportunistic ReadAtLeast into dst
 	// because there might be more than one wire message waiting to be read, for example when
 	// reading messages from an exhaust cursor.
 	_, err := io.ReadFull(c.nc, sizeBuf[:])
 	if err != nil {
-		c.cancellationListener.StopListening()
+		c.cancellationListener.AbortCurrentContext()
+
 		// We closeConnection the connection because we don't know if there are other bytes left to read.
 		c.close()
 		message := "incomplete read of message header"
@@ -367,7 +371,7 @@ func (c *connection) readWireMessage(ctx context.Context, dst []byte) ([]byte, e
 	copy(dst, sizeBuf[:])
 
 	_, err = io.ReadFull(c.nc, dst[4:])
-	c.cancellationListener.StopListening()
+	c.cancellationListener.AbortCurrentContext()
 	if err != nil {
 		// We closeConnection the connection because we don't know if there are other bytes left to read.
 		c.close()
@@ -392,6 +396,7 @@ func (c *connection) close() error {
 		return nil
 	}
 
+	c.cancellationListener.Exit()
 	var err error
 	if c.nc != nil {
 		err = c.nc.Close()

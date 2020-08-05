@@ -9,6 +9,8 @@ package topology
 import "context"
 
 type cancellationListener interface {
-	Listen(context.Context, func())
-	StopListening()
+	Run()
+	AddContext(context.Context)
+	AbortCurrentContext()
+	Exit()
 }

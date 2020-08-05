@@ -65,6 +65,10 @@ func TestConnectionErrors(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			conn := &connection{id: "foobar", nc: &net.TCPConn{}, connected: connected}
+			listener := newTestCancellationListener(conn.cancellationListenerCallback)
+			conn.cancellationListener = listener
+			go listener.Run()
+
 			_, err := conn.readWireMessage(ctx, []byte{})
 			assert.True(t, errors.Is(err, context.Canceled), "expected error %v, got %v", context.Canceled, err)
 		})
