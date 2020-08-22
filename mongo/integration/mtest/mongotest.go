@@ -102,6 +102,7 @@ type T struct {
 	ssl              *bool
 	collCreateOpts   bson.D
 	connsCheckedOut  int // net number of connections checked out during test execution
+	finalClientOpts  *options.ClientOptions
 
 	// options copied to sub-tests
 	clientType  ClientType
@@ -537,6 +538,11 @@ func (t *T) ConnString() string {
 	return testContext.connString.Original
 }
 
+// ClientOptions returns the options used to construct the test Client.
+func (t *T) ClientOptions() *options.ClientOptions {
+	return t.finalClientOpts
+}
+
 // CloneDatabase modifies the default database for this test to match the given options.
 func (t *T) CloneDatabase(opts *options.DatabaseOptions) {
 	t.DB = t.Client.Database(t.dbName, opts)
@@ -629,13 +635,16 @@ func (t *T) createTestClient() {
 		// pin to first mongos
 		pinnedHostList := []string{testContext.connString.Hosts[0]}
 		uriOpts := options.Client().ApplyURI(testContext.connString.Original).SetHosts(pinnedHostList)
-		t.Client, err = mongo.NewClient(uriOpts, clientOpts)
+		t.finalClientOpts = options.MergeClientOptions(uriOpts, clientOpts)
+		t.Client, err = mongo.NewClient(t.finalClientOpts)
 	case Mock:
 		// clear pool monitor to avoid configuration error
 		clientOpts.PoolMonitor = nil
 		t.mockDeployment = newMockDeployment()
 		clientOpts.Deployment = t.mockDeployment
-		t.Client, err = mongo.NewClient(clientOpts)
+
+		t.finalClientOpts = clientOpts
+		t.Client, err = mongo.NewClient(t.finalClientOpts)
 	case Proxy:
 		t.proxyDialer = newProxyDialer()
 		clientOpts.SetDialer(t.proxyDialer)
@@ -653,7 +662,8 @@ func (t *T) createTestClient() {
 		}
 
 		// Pass in uriOpts first so clientOpts wins if there are any conflicting settings.
-		t.Client, err = mongo.NewClient(uriOpts, clientOpts)
+		t.finalClientOpts = options.MergeClientOptions(uriOpts, clientOpts)
+		t.Client, err = mongo.NewClient(t.finalClientOpts)
 	}
 	if err != nil {
 		t.Fatalf("error creating client: %v", err)
