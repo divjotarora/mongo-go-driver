@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"testing"
 
@@ -76,6 +77,11 @@ func verifyValuesMatch(ctx context.Context, expected, actual bson.RawValue) erro
 			// matching operators can assert that the value isn't present in the document (e.g. $$exists).
 			actualValue, err := actualDoc.LookupErr(expectedKey)
 			if specialDoc, ok := expectedValue.DocumentOK(); ok && requiresSpecialMatching(specialDoc) {
+				// Reset the key path so any errors returned from the function will only have the key path for the
+				// target value. Also unconditionally set extraKeysAllowed to false because an assertion like
+				// $$unsetOrMatches could recurse back into this function. In that case, the target document is nested
+				// and should not have extra keys.
+				ctx = makeMatchContext(ctx, "", extraKeysAllowed)
 				if err := evaluateSpecialComparison(ctx, specialDoc, actualValue, expectedKey); err != nil {
 					return newMatchingError(fullKeyPath, "error doing special matching assertion: %v", err)
 				}
@@ -361,6 +367,7 @@ func TestMatches(t *testing.T) {
 		t.Helper()
 
 		err := VerifyValuesMatch(ctx, expected, actual, true)
+		log.Println(err)
 		if shouldMatch {
 			assert.Nil(t, err, "expected values to match, but got comparison error %v", err)
 			return
@@ -494,7 +501,7 @@ func TestMatches(t *testing.T) {
 			{"nested matches", nested, `{"x": {"y": 1}}`, true},
 			{"nested null exists but is null", nested, `{"x": "null"}`, false}, // null should not be considered unset
 			{"nested does not match", nested, `{"x": {"y": 2}}`, false},
-			// {"nested does not match due to extra keys", nested, `{"x": {"y": 1, "z": 1}}`, false}, TODO
+			{"nested does not match due to extra keys", nested, `{"x": {"y": 1, "z": 1}}`, false},
 		}
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
