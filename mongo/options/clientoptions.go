@@ -30,6 +30,10 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage"
 )
 
+var (
+	defaultConnectTimeout = 30 * time.Second
+)
+
 // ContextDialer is an interface that can be implemented by types that can create connections. It should be used to
 // provide a custom dialer when configuring a Client.
 //
@@ -116,11 +120,14 @@ type ClientOptions struct {
 	RetryReads               *bool
 	RetryWrites              *bool
 	ServerSelectionTimeout   *time.Duration
-	SocketTimeout            *time.Duration
-	TLSConfig                *tls.Config
-	WriteConcern             *writeconcern.WriteConcern
-	ZlibLevel                *int
-	ZstdLevel                *int
+
+	// TODO deprecate
+	SocketTimeout *time.Duration
+	Timeout       *time.Duration
+	TLSConfig     *tls.Config
+	WriteConcern  *writeconcern.WriteConcern
+	ZlibLevel     *int
+	ZstdLevel     *int
 
 	err error
 	uri string
@@ -141,7 +148,7 @@ type ClientOptions struct {
 
 // Client creates a new ClientOptions instance.
 func Client() *ClientOptions {
-	return new(ClientOptions)
+	return (&ClientOptions{}).SetConnectTimeout(defaultConnectTimeout)
 }
 
 // Validate validates the client options. This method will return the first error found.
@@ -165,6 +172,14 @@ func (c *ClientOptions) validateAndSetError() {
 			c.err = errors.New("a direct connection cannot be made if an SRV URI is used")
 			return
 		}
+	}
+
+	// timeoutMS cannot be used with a deprecated timeout option.
+	if c.Timeout != nil && c.SocketTimeout != nil {
+		c.err = errors.New("the Timeout and SocketTimeout options cannot be used together")
+	}
+	if c.Timeout != nil && c.WriteConcern != nil && c.WriteConcern.GetWTimeout() != 0 {
+		c.err = errors.New("the Timeout option cannot be used with a WriteConcern configured with WTimeout")
 	}
 }
 
@@ -618,8 +633,15 @@ func (c *ClientOptions) SetServerSelectionTimeout(d time.Duration) *ClientOption
 // SetSocketTimeout specifies how long the driver will wait for a socket read or write to return before returning a
 // network error. This can also be set through the "socketTimeoutMS" URI option (e.g. "socketTimeoutMS=1000"). The
 // default value is 0, meaning no timeout is used and socket operations can block indefinitely.
+// TODO deprecate
 func (c *ClientOptions) SetSocketTimeout(d time.Duration) *ClientOptions {
 	c.SocketTimeout = &d
+	return c
+}
+
+// SetTimeout specifies a per-operation timeout value.
+func (c *ClientOptions) SetTimeout(timeout time.Duration) *ClientOptions {
+	c.Timeout = &timeout
 	return c
 }
 
@@ -814,6 +836,9 @@ func MergeClientOptions(opts ...*ClientOptions) *ClientOptions {
 		}
 		if opt.DisableOCSPEndpointCheck != nil {
 			c.DisableOCSPEndpointCheck = opt.DisableOCSPEndpointCheck
+		}
+		if opt.Timeout != nil {
+			c.Timeout = opt.Timeout
 		}
 		if opt.err != nil {
 			c.err = opt.err

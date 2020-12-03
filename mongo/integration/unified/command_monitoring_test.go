@@ -12,6 +12,17 @@ import (
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
+)
+
+var (
+	cursorCreatingCommands = map[string]struct{}{
+		"aggregate":       {},
+		"find":            {},
+		"listCollections": {},
+		"listIndexes":     {},
+	}
 )
 
 type CommandMonitoringEvent struct {
@@ -32,8 +43,33 @@ type CommandMonitoringEvent struct {
 }
 
 type ExpectedEvents struct {
-	ClientID string                   `bson:"client"`
-	Events   []CommandMonitoringEvent `bson:"events"`
+	ClientID        string                   `bson:"client"`
+	Events          []CommandMonitoringEvent `bson:"events"`
+	IgnoredCommands []string                 `bson:"ignoreCommandMonitoringEvents"`
+}
+
+type AllEvents struct {
+	Started   []*event.CommandStartedEvent
+	Succeeded []*event.CommandSucceededEvent
+	Failed    []*event.CommandFailedEvent
+}
+
+func (e *ExpectedEvents) GetAllEvents(client *ClientEntity) *AllEvents {
+	startedFilter := func(evt *event.CommandStartedEvent) bool {
+		return !stringSliceContains(e.IgnoredCommands, evt.CommandName)
+	}
+	succeededFilter := func(evt *event.CommandSucceededEvent) bool {
+		return !stringSliceContains(e.IgnoredCommands, evt.CommandName)
+	}
+	failedFilter := func(evt *event.CommandFailedEvent) bool {
+		return !stringSliceContains(e.IgnoredCommands, evt.CommandName)
+	}
+
+	return &AllEvents{
+		Started:   client.StartedEvents(startedFilter),
+		Succeeded: client.SucceededEvents(succeededFilter),
+		Failed:    client.FailedEvents(failedFilter),
+	}
 }
 
 func VerifyEvents(ctx context.Context, expectedEvents *ExpectedEvents) error {
@@ -46,109 +82,134 @@ func VerifyEvents(ctx context.Context, expectedEvents *ExpectedEvents) error {
 		return nil
 	}
 
-	started := client.StartedEvents()
-	succeeded := client.SucceededEvents()
-	failed := client.FailedEvents()
+	events := expectedEvents.GetAllEvents(client)
 
 	// If the Events array is nil, verify that no events were sent.
-	if len(expectedEvents.Events) == 0 && (len(started)+len(succeeded)+len(failed) != 0) {
-		return fmt.Errorf("expected no events to be sent but got %s", stringifyEventsForClient(client))
+	if len(expectedEvents.Events) == 0 && (len(events.Started)+len(events.Succeeded)+len(events.Failed) != 0) {
+		return fmt.Errorf("expected no events to be sent but got %s", stringifyEvents(expectedEvents, client))
 	}
 
 	for idx, evt := range expectedEvents.Events {
 		switch {
 		case evt.CommandStartedEvent != nil:
-			if len(started) == 0 {
-				return newEventVerificationError(idx, client, "no CommandStartedEvent published")
+			if len(events.Started) == 0 {
+				return newEventVerificationError(idx, expectedEvents, client, "no CommandStartedEvent published")
 			}
 
-			actual := started[0]
-			started = started[1:]
+			actual := events.Started[0]
+			events.Started = events.Started[1:]
 
 			expected := evt.CommandStartedEvent
 			if expected.CommandName != nil && *expected.CommandName != actual.CommandName {
-				return newEventVerificationError(idx, client, "expected command name %q, got %q", *expected.CommandName,
-					actual.CommandName)
+				return newEventVerificationError(idx, expectedEvents, client, "expected command name %q, got %q",
+					*expected.CommandName, actual.CommandName)
 			}
 			if expected.DatabaseName != nil && *expected.DatabaseName != actual.DatabaseName {
-				return newEventVerificationError(idx, client, "expected database name %q, got %q", *expected.DatabaseName,
-					actual.DatabaseName)
+				return newEventVerificationError(idx, expectedEvents, client, "expected database name %q, got %q",
+					*expected.DatabaseName, actual.DatabaseName)
 			}
 			if expected.Command != nil {
 				expectedDoc := DocumentToRawValue(expected.Command)
-				actualDoc := DocumentToRawValue(actual.Command)
+				actualDoc := DocumentToRawValue(fixMaxTimeMS(actual.CommandName, expected.Command, actual.Command))
 				if err := VerifyValuesMatch(ctx, expectedDoc, actualDoc, true); err != nil {
-					return newEventVerificationError(idx, client, "error comparing command documents: %v", err)
+					return newEventVerificationError(idx, expectedEvents, client,
+						"error comparing command documents: %v", err)
 				}
 			}
 		case evt.CommandSucceededEvent != nil:
-			if len(succeeded) == 0 {
-				return newEventVerificationError(idx, client, "no CommandSucceededEvent published")
+			if len(events.Succeeded) == 0 {
+				return newEventVerificationError(idx, expectedEvents, client, "no CommandSucceededEvent published")
 			}
 
-			actual := succeeded[0]
-			succeeded = succeeded[1:]
+			actual := events.Succeeded[0]
+			events.Succeeded = events.Succeeded[1:]
 
 			expected := evt.CommandSucceededEvent
 			if expected.CommandName != nil && *expected.CommandName != actual.CommandName {
-				return newEventVerificationError(idx, client, "expected command name %q, got %q", *expected.CommandName,
-					actual.CommandName)
+				return newEventVerificationError(idx, expectedEvents, client, "expected command name %q, got %q",
+					*expected.CommandName, actual.CommandName)
 			}
 			if expected.Reply != nil {
 				expectedDoc := DocumentToRawValue(expected.Reply)
 				actualDoc := DocumentToRawValue(actual.Reply)
 				if err := VerifyValuesMatch(ctx, expectedDoc, actualDoc, true); err != nil {
-					return newEventVerificationError(idx, client, "error comparing reply documents: %v", err)
+					return newEventVerificationError(idx, expectedEvents, client, "error comparing reply documents: %v",
+						err)
 				}
 			}
 		case evt.CommandFailedEvent != nil:
-			if len(failed) == 0 {
-				return newEventVerificationError(idx, client, "no CommandFailedEvent published")
+			if len(events.Failed) == 0 {
+				return newEventVerificationError(idx, expectedEvents, client, "no CommandFailedEvent published")
 			}
 
-			actual := failed[0]
-			failed = failed[1:]
+			actual := events.Failed[0]
+			events.Failed = events.Failed[1:]
 
 			expected := evt.CommandFailedEvent
 			if expected.CommandName != nil && *expected.CommandName != actual.CommandName {
-				return newEventVerificationError(idx, client, "expected command name %q, got %q", *expected.CommandName,
-					actual.CommandName)
+				return newEventVerificationError(idx, expectedEvents, client, "expected command name %q, got %q",
+					*expected.CommandName, actual.CommandName)
 			}
 		default:
-			return newEventVerificationError(idx, client, "no expected event set on CommandMonitoringEvent instance")
+			return newEventVerificationError(idx, expectedEvents, client,
+				"no expected event set on CommandMonitoringEvent instance")
 		}
 	}
 
 	// Verify that there are no remaining events.
-	if len(started) > 0 || len(succeeded) > 0 || len(failed) > 0 {
-		return fmt.Errorf("extra events published; all events for client: %s", stringifyEventsForClient(client))
+	if len(events.Started) > 0 || len(events.Succeeded) > 0 || len(events.Failed) > 0 {
+		return fmt.Errorf("extra events published; all events for client: %s", stringifyEvents(expectedEvents, client))
 	}
 	return nil
 }
 
-func newEventVerificationError(idx int, client *ClientEntity, msg string, args ...interface{}) error {
+func newEventVerificationError(idx int, expected *ExpectedEvents, client *ClientEntity, msg string, args ...interface{}) error {
 	fullMsg := fmt.Sprintf(msg, args...)
 	return fmt.Errorf("event comparison failed at index %d: %s; all events found for client: %s", idx, fullMsg,
-		stringifyEventsForClient(client))
+		stringifyEvents(expected, client))
 }
 
-func stringifyEventsForClient(client *ClientEntity) string {
+func stringifyEvents(expectedEvents *ExpectedEvents, client *ClientEntity) string {
+	events := expectedEvents.GetAllEvents(client)
 	str := bytes.NewBuffer(nil)
 
 	str.WriteString("\n\nStarted Events\n\n")
-	for _, evt := range client.StartedEvents() {
+	for _, evt := range events.Started {
 		str.WriteString(fmt.Sprintf("[%s] %s\n", evt.ConnectionID, evt.Command))
 	}
 
 	str.WriteString("\nSucceeded Events\n\n")
-	for _, evt := range client.SucceededEvents() {
+	for _, evt := range events.Succeeded {
 		str.WriteString(fmt.Sprintf("[%s] CommandName: %s, Reply: %s\n", evt.ConnectionID, evt.CommandName, evt.Reply))
 	}
 
 	str.WriteString("\nFailed Events\n\n")
-	for _, evt := range client.FailedEvents() {
+	for _, evt := range events.Failed {
 		str.WriteString(fmt.Sprintf("[%s] CommandName: %s, Failure: %s\n", evt.ConnectionID, evt.CommandName, evt.Failure))
 	}
 
 	return str.String()
+}
+
+func fixMaxTimeMS(cmdName string, expectedCommand, actualCommand bson.Raw) bson.Raw {
+	if _, ok := cursorCreatingCommands[cmdName]; !ok {
+		return actualCommand
+	}
+
+	expectedVal, err := expectedCommand.LookupErr("maxTimeMS")
+	if err != nil || expectedVal.IsNumber() {
+		return actualCommand
+	}
+
+	existsFalseDoc := bsoncore.NewDocumentBuilder().
+		AppendBoolean("$$exists", false).
+		Build()
+	if doc, ok := expectedVal.DocumentOK(); ok && bytes.Equal(doc, existsFalseDoc) {
+		return actualCommand
+	}
+
+	actualCommand = actualCommand[:len(actualCommand)-1]
+	actualCommand = bsoncore.AppendInt64Element(actualCommand, "maxTimeMS", 1)
+	actualCommand, _ = bsoncore.AppendDocumentEnd(actualCommand, 0)
+	return actualCommand
 }

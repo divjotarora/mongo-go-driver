@@ -821,7 +821,7 @@
       ]
     },
     {
-      "description": "Download fails after two NotMaster errors",
+      "description": "Download succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -842,8 +842,7 @@
             "id": {
               "$oid": "000000000000000000000001"
             }
-          },
-          "error": true
+          }
         }
       ],
       "expectations": [

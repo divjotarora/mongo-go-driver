@@ -168,8 +168,14 @@ func (bc *BatchCursor) Next(ctx context.Context) bool {
 	}
 
 	if bc.firstBatch {
+		// Return true if the first batch is non-empty. If it is empty and no server-side cursor was established, the
+		// ID check below will return false. If there is a server-side cursor (e.g. this is a change stream with no
+		// events from aggregate), we'll do a getMore.
 		bc.firstBatch = false
-		return !bc.currentBatch.Empty()
+		if !bc.currentBatch.Empty() {
+			return true
+		}
+		// return !bc.currentBatch.Empty()
 	}
 
 	if bc.id == 0 || bc.server == nil {
@@ -219,6 +225,7 @@ func (bc *BatchCursor) KillCursor(ctx context.Context) error {
 	}
 
 	return Operation{
+		CommandName: "killCursors",
 		CommandFn: func(dst []byte, desc description.SelectedServer) ([]byte, error) {
 			dst = bsoncore.AppendStringElement(dst, "killCursors", bc.collection)
 			dst = bsoncore.BuildArrayElement(dst, "cursors", bsoncore.Value{Type: bsontype.Int64, Data: bsoncore.AppendInt64(nil, bc.id)})
@@ -253,6 +260,7 @@ func (bc *BatchCursor) getMore(ctx context.Context) {
 	}
 
 	bc.err = Operation{
+		CommandName: "getMore",
 		CommandFn: func(dst []byte, desc description.SelectedServer) ([]byte, error) {
 			dst = bsoncore.AppendInt64Element(dst, "getMore", bc.id)
 			dst = bsoncore.AppendStringElement(dst, "collection", bc.collection)

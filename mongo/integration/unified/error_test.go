@@ -8,6 +8,7 @@ package unified
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -19,6 +20,8 @@ import (
 // test files because it is always true if it is specified, so the runner can simply assert that an error occurred.
 type ExpectedError struct {
 	IsClientError  *bool          `bson:"isClientError"`
+	IsNetworkError *bool          `bson:"isNetworkError"`
+	IsTimeoutError *bool          `bson:"isTimeoutError"`
 	ErrorSubstring *string        `bson:"errorContains"`
 	Code           *int32         `bson:"errorCode"`
 	CodeName       *string        `bson:"errorCodeName"`
@@ -31,6 +34,11 @@ type ExpectedError struct {
 // this function will only check that result.Err is also nil. Otherwise, it will check that result.Err is non-nil and
 // will perform any other assertions required by the ExpectedError object. An error is returned if any checks fail.
 func VerifyOperationError(ctx context.Context, expected *ExpectedError, result *OperationResult) error {
+	// TODO: here?
+	if result.Err == mongo.ErrUnacknowledgedWrite {
+		result.Err = nil
+	}
+
 	if expected == nil {
 		if result.Err != nil {
 			return fmt.Errorf("expected no error, but got %v", result.Err)
@@ -46,6 +54,23 @@ func VerifyOperationError(ctx context.Context, expected *ExpectedError, result *
 	if expected.ErrorSubstring != nil {
 		if !strings.Contains(result.Err.Error(), *expected.ErrorSubstring) {
 			return fmt.Errorf("expected error %v to contain substring %s", result.Err, *expected.ErrorSubstring)
+		}
+	}
+
+	if expected.IsNetworkError != nil {
+		ce, ok := result.Err.(mongo.CommandError)
+		if !ok {
+			return fmt.Errorf("expected network error of type mongo.CommandError, got %v of type %T", result.Err, result.Err)
+		}
+		if !ce.HasErrorLabel("NetworkError") {
+			return fmt.Errorf("error %v does not have label 'NetworkError'", ce)
+		}
+	}
+	if expected.IsTimeoutError != nil {
+		isTimeoutError := errors.Is(result.Err, context.DeadlineExceeded)
+		if *expected.IsTimeoutError != isTimeoutError {
+			return fmt.Errorf("expected error %v to be a timeout: %v, is timeout: %v", result.Err,
+				*expected.IsTimeoutError, isTimeoutError)
 		}
 	}
 

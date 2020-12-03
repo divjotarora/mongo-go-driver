@@ -32,7 +32,7 @@ type CommitTransaction struct {
 	deployment    driver.Deployment
 	selector      description.ServerSelector
 	writeConcern  *writeconcern.WriteConcern
-	retry         *driver.RetryMode
+	retry         bool
 }
 
 // NewCommitTransaction constructs and returns a new CommitTransaction.
@@ -52,9 +52,10 @@ func (ct *CommitTransaction) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "commitTransaction",
 		CommandFn:         ct.command,
 		ProcessResponseFn: ct.processResponse,
-		RetryMode:         ct.retry,
+		Retry:             ct.retry,
 		Type:              driver.Write,
 		Client:            ct.session,
 		Clock:             ct.clock,
@@ -182,11 +183,11 @@ func (ct *CommitTransaction) WriteConcern(writeConcern *writeconcern.WriteConcer
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (ct *CommitTransaction) Retry(retry driver.RetryMode) *CommitTransaction {
+func (ct *CommitTransaction) Retry(retry bool) *CommitTransaction {
 	if ct == nil {
 		ct = new(CommitTransaction)
 	}
 
-	ct.retry = &retry
+	ct.retry = retry
 	return ct
 }

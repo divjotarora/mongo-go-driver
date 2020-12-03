@@ -7,6 +7,8 @@
 package options
 
 import (
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -30,6 +32,9 @@ type DatabaseOptions struct {
 	// The BSON registry to marshal and unmarshal documents for operations executed on the Database. The default value
 	// is nil, which means that the registry of the client used to configure the Database will be used.
 	Registry *bsoncodec.Registry
+
+	// The per-operation timeout for all operations executed against this Database.
+	Timeout *time.Duration
 }
 
 // Database creates a new DatabaseOptions instance.
@@ -61,6 +66,12 @@ func (d *DatabaseOptions) SetRegistry(r *bsoncodec.Registry) *DatabaseOptions {
 	return d
 }
 
+// SetTimeout sets the value for the Timeout field.
+func (d *DatabaseOptions) SetTimeout(timeout time.Duration) *DatabaseOptions {
+	d.Timeout = &timeout
+	return d
+}
+
 // MergeDatabaseOptions combines the given DatabaseOptions instances into a single DatabaseOptions in a last-one-wins
 // fashion.
 func MergeDatabaseOptions(opts ...*DatabaseOptions) *DatabaseOptions {
@@ -81,6 +92,9 @@ func MergeDatabaseOptions(opts ...*DatabaseOptions) *DatabaseOptions {
 		}
 		if opt.Registry != nil {
 			d.Registry = opt.Registry
+		}
+		if opt.Timeout != nil {
+			d.Timeout = opt.Timeout
 		}
 	}
 

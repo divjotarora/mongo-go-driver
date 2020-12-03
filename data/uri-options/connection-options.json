@@ -135,7 +135,8 @@
       "valid": false,
       "warning": false,
       "hosts": null,
-      "auth": null
+      "auth": null,
+      "options": {}
     },
     {
       "description": "directConnection=false",
@@ -164,6 +165,73 @@
       "uri": "mongodb://example.com/?directConnection=invalid",
       "valid": true,
       "warning": true,
+      "hosts": null,
+      "auth": null,
+      "options": {}
+    },
+    {
+      "description": "valid non-zero timeoutMS is parsed correctly",
+      "uri": "mongodb://example.com/?timeoutMS=100",
+      "valid": true,
+      "warning": false,
+      "hosts": null,
+      "auth": null,
+      "options": {
+        "timeoutMS": 100
+      }
+    },
+    {
+      "description": "timeoutMS=0",
+      "uri": "mongodb://example.com/?timeoutMS=0",
+      "valid": true,
+      "warning": false,
+      "hosts": null,
+      "auth": null,
+      "options": {
+        "timeoutMS": 0
+      }
+    },
+    {
+      "description": "Non-numeric timeoutMS causes a warning",
+      "uri": "mongodb://example.com/?timeoutMS=invalid",
+      "valid": true,
+      "warning": true,
+      "hosts": null,
+      "auth": null,
+      "options": {}
+    },
+    {
+      "description": "Too low timeoutMS causes a warning",
+      "uri": "mongodb://example.com/?timeoutMS=-2",
+      "valid": true,
+      "warning": true,
+      "hosts": null,
+      "auth": null,
+      "options": {}
+    },
+    {
+      "description": "timeoutMS and socketTimeoutMS both present raises an error",
+      "uri": "mongodb://example.com/?timeoutMS=100&socketTimeoutMS=100",
+      "valid": false,
+      "warning": false,
+      "hosts": null,
+      "auth": null,
+      "options": {}
+    },
+    {
+      "description": "timeoutMS and waitQueueTimeoutMS both present raises an error",
+      "uri": "mongodb://example.com/?timeoutMS=100&waitQueueTimeoutMS=100",
+      "valid": false,
+      "warning": false,
+      "hosts": null,
+      "auth": null,
+      "options": {}
+    },
+    {
+      "description": "timeoutMS and wTimeoutMS both present raises an error",
+      "uri": "mongodb://example.com/?timeoutMS=100&wTimeoutMS=100",
+      "valid": false,
+      "warning": false,
       "hosts": null,
       "auth": null,
       "options": {}

@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
@@ -42,6 +43,12 @@ func executeBucketDelete(ctx context.Context, operation *Operation) (*OperationR
 		return nil, newMissingArgumentError("id")
 	}
 
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := bucket.SetWriteDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("error setting bucket read dealine: %v", err)
+		}
+	}
+
 	return NewErrorResult(bucket.Delete(*id)), nil
 }
 
@@ -68,6 +75,12 @@ func executeBucketDownload(ctx context.Context, operation *Operation) (*Operatio
 		return nil, newMissingArgumentError("id")
 	}
 
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := bucket.SetReadDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("error setting bucket read deadline: %v", err)
+		}
+	}
+
 	stream, err := bucket.OpenDownloadStream(*id)
 	if err != nil {
 		return NewErrorResult(err), nil
@@ -79,6 +92,112 @@ func executeBucketDownload(ctx context.Context, operation *Operation) (*Operatio
 	}
 
 	return NewValueResult(bsontype.Binary, bsoncore.AppendBinary(nil, 0, buffer.Bytes()), nil), nil
+}
+
+func executeBucketDrop(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	bucket, err := Entities(ctx).GridFSBucket(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	elems, _ := operation.Arguments.Elements()
+	if len(elems) > 0 {
+		return nil, fmt.Errorf("unrecongized drop options %v", operation.Arguments)
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := bucket.SetWriteDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("error setting bucket write deadline: %v", err)
+		}
+	}
+
+	return NewErrorResult(bucket.Drop()), nil
+}
+
+func executeBucketFind(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	bucket, err := Entities(ctx).GridFSBucket(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	var filter bson.Raw
+	opts := options.GridFSFind()
+
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "filter":
+			filter = val.Document()
+		case "maxTimeMS":
+			maxTime := time.Duration(val.Int32()) * time.Millisecond
+			opts.SetMaxTime(maxTime)
+		default:
+			return nil, fmt.Errorf("unrecognized find option %q", key)
+		}
+	}
+	if filter == nil {
+		return nil, newMissingArgumentError("filter")
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := bucket.SetReadDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("error setting bucket read deadline: %v", err)
+		}
+	}
+
+	cursor, err := bucket.Find(filter, opts)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	defer cursor.Close(ctx)
+
+	var docs []bson.Raw
+	if err := cursor.All(ctx, &docs); err != nil {
+		return NewErrorResult(err), nil
+	}
+	return NewCursorResult(docs), nil
+}
+
+func executeBucketRename(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	bucket, err := Entities(ctx).GridFSBucket(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	var fileID *bson.RawValue
+	var newName string
+
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "id":
+			fileID = &val
+		case "newFilename":
+			newName = val.StringValue()
+		default:
+			return nil, fmt.Errorf("unrecognized rename option %q", key)
+		}
+	}
+	if fileID == nil {
+		return nil, newMissingArgumentError("id")
+	}
+	if newName == "" {
+		return nil, newMissingArgumentError("newFilename")
+	}
+
+	if deadline, ok := ctx.Deadline(); ok {
+		if err := bucket.SetWriteDeadline(deadline); err != nil {
+			return nil, fmt.Errorf("error setting bucket write deadline: %v", err)
+		}
+	}
+
+	return NewErrorResult(bucket.Rename(fileID, newName)), nil
 }
 
 func executeBucketUpload(ctx context.Context, operation *Operation) (*OperationResult, error) {
@@ -117,6 +236,12 @@ func executeBucketUpload(ctx context.Context, operation *Operation) (*OperationR
 	}
 	if fileBytes == nil {
 		return nil, newMissingArgumentError("source")
+	}
+
+	if dl, ok := ctx.Deadline(); ok {
+		if err := bucket.SetWriteDeadline(dl); err != nil {
+			return nil, fmt.Errorf("error setting bucket write deadline: %v", err)
+		}
 	}
 
 	fileID, err := bucket.UploadFromStream(filename, bytes.NewReader(fileBytes), opts)

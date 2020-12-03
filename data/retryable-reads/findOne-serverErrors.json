@@ -634,7 +634,7 @@
       ]
     },
     {
-      "description": "FindOne fails after two NotMaster errors",
+      "description": "FindOne succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -656,7 +656,10 @@
               "_id": 1
             }
           },
-          "error": true
+          "result": {
+            "_id": 1,
+            "x": 11
+          }
         }
       ],
       "expectations": [

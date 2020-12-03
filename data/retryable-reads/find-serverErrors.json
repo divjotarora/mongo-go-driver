@@ -854,7 +854,7 @@
       ]
     },
     {
-      "description": "Find fails after two NotMaster errors",
+      "description": "Find succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -878,7 +878,24 @@
             },
             "limit": 4
           },
-          "error": true
+          "result": [
+            {
+              "_id": 1,
+              "x": 11
+            },
+            {
+              "_id": 2,
+              "x": 22
+            },
+            {
+              "_id": 3,
+              "x": 33
+            },
+            {
+              "_id": 4,
+              "x": 44
+            }
+          ]
         }
       ],
       "expectations": [

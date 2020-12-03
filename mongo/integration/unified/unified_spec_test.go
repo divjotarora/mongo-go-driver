@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,6 +24,7 @@ import (
 var (
 	directories = []string{
 		"unified-test-format/valid-pass",
+		"client-side-operations-timeout",
 	}
 
 	skippedTestDescriptions = map[string]struct{}{
@@ -34,6 +36,16 @@ var (
 		// a "." or "$". We don't do this validation and the server is moving towards supporting this, so we don't have
 		// any plans to add it. This test will need to be changed once the server support lands anyway.
 		"Client side error in command starting transaction": {},
+
+		// We do not support the timeoutMode option, so we skip any tests that validate its usage.
+		"error if timeoutMode is cursor_lifetime": {},
+
+		// TODO: not sure if this needs to be skipped yet
+		"withTransaction raises a client-side error if timeoutMS is overriden inside the callback": {},
+	}
+
+	skippedTestFiles = map[string]struct{}{
+		"client-side-operations-timeout/cursors.json": {},
 	}
 )
 
@@ -81,6 +93,26 @@ type TestFile struct {
 	TestCases         []*TestCase                 `bson:"tests"`
 }
 
+// SkipTestError should be returned from a function to indicate that the test currently being executed needs to be
+// skipped.
+type SkipTestError struct {
+	reason string
+}
+
+func (s *SkipTestError) Error() string {
+	return fmt.Sprintf("test must be skipped: %s", s.reason)
+}
+
+func NewSkipTestError(reason string) error {
+	return &SkipTestError{
+		reason: reason,
+	}
+}
+
+func IsSkipTestError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "test must be skipped: ")
+}
+
 func TestUnifiedSpec(t *testing.T) {
 	// Ensure the cluster is in a clean state before test execution begins.
 	if err := TerminateOpenSessions(mtest.Background); err != nil {
@@ -91,6 +123,10 @@ func TestUnifiedSpec(t *testing.T) {
 		t.Run(testDir, func(t *testing.T) {
 			for _, filename := range testhelpers.FindJSONFilesInDir(t, path.Join(dataDirectory, testDir)) {
 				t.Run(filename, func(t *testing.T) {
+					if _, ok := skippedTestFiles[path.Join(testDir, filename)]; ok {
+						t.Skipf("skipping file %q", filename)
+					}
+
 					runTestFile(t, path.Join(dataDirectory, testDir, filename))
 				})
 			}
@@ -184,6 +220,9 @@ func runTestCase(mt *mtest.T, testFile TestFile, testCase *TestCase) {
 			}
 
 			if err := Entities(testCtx).AddEntity(testCtx, entityType, entityOptions); err != nil {
+				if IsSkipTestError(err) {
+					mt.Skip(err)
+				}
 				mt.Fatalf("error creating entity at index %d: %v", idx, err)
 			}
 		}
@@ -198,6 +237,9 @@ func runTestCase(mt *mtest.T, testFile TestFile, testCase *TestCase) {
 
 	for idx, operation := range testCase.Operations {
 		err := operation.Execute(testCtx)
+		if IsSkipTestError(err) {
+			mt.Skip(err)
+		}
 		assert.Nil(mt, err, "error running operation %q at index %d: %v", operation.Name, idx, err)
 	}
 

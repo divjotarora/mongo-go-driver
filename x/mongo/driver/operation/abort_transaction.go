@@ -32,7 +32,7 @@ type AbortTransaction struct {
 	deployment    driver.Deployment
 	selector      description.ServerSelector
 	writeConcern  *writeconcern.WriteConcern
-	retry         *driver.RetryMode
+	retry         bool
 }
 
 // NewAbortTransaction constructs and returns a new AbortTransaction.
@@ -52,9 +52,10 @@ func (at *AbortTransaction) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "abortTransaction",
 		CommandFn:         at.command,
 		ProcessResponseFn: at.processResponse,
-		RetryMode:         at.retry,
+		Retry:             at.retry,
 		Type:              driver.Write,
 		Client:            at.session,
 		Clock:             at.clock,
@@ -179,11 +180,11 @@ func (at *AbortTransaction) WriteConcern(writeConcern *writeconcern.WriteConcern
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (at *AbortTransaction) Retry(retry driver.RetryMode) *AbortTransaction {
+func (at *AbortTransaction) Retry(retry bool) *AbortTransaction {
 	if at == nil {
 		at = new(AbortTransaction)
 	}
 
-	at.retry = &retry
+	at.retry = retry
 	return at
 }

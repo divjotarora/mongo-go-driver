@@ -26,6 +26,7 @@ type retryableWritesTestFile struct {
 
 type retryableWritesTest struct {
 	Description         string           `bson:"description"`
+	SkipReason          *string          `bson:"skipReason"`
 	ClientOptions       bson.Raw         `bson:"clientOptions"`
 	UseMultipleMongoses bool             `bson:"useMultipleMongoses"`
 	FailPoint           *mtest.FailPoint `bson:"failPoint"`
@@ -69,6 +70,10 @@ func runRetryableWritesTest(mt *mtest.T, test retryableWritesTest, testFile retr
 	}
 
 	mt.RunOpts(test.Description, opts, func(mt *mtest.T) {
+		if test.SkipReason != nil {
+			mt.Skip(*test.SkipReason)
+		}
+
 		// setup - insert test data and set fail point
 		insertDocuments(mt, mt.Coll, testFile.Data)
 		if test.FailPoint != nil {

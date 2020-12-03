@@ -9,6 +9,7 @@ package unified
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -23,6 +24,8 @@ const (
 	failPointsKey ctxKey = "test-failpoints"
 	// targetedFailPointsKey is used to store a map from a fail point name to the host on which the fail point is set.
 	targetedFailPointsKey ctxKey = "test-targeted-failpoints"
+	// timeoutMSKey is used to store the original timeoutMS value for an operation
+	timeoutMSKey ctxKey = "test-timeoutMS"
 )
 
 // NewTestContext creates a new Context derived from ctx with values initialized to store the state required for test
@@ -32,6 +35,19 @@ func NewTestContext(ctx context.Context) context.Context {
 	ctx = context.WithValue(ctx, failPointsKey, make(map[string]*mongo.Client))
 	ctx = context.WithValue(ctx, targetedFailPointsKey, make(map[string]string))
 	return ctx
+}
+
+func WithTimeoutMS(ctx context.Context, timeoutMS int32) (context.Context, context.CancelFunc) {
+	ctx = context.WithValue(ctx, timeoutMSKey, timeoutMS)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMS)*time.Millisecond)
+	return ctx, cancel
+}
+
+func TimeoutMS(ctx context.Context) (int32, bool) {
+	if timeout := ctx.Value(timeoutMSKey); timeout != nil {
+		return timeout.(int32), true
+	}
+	return 0, false
 }
 
 func AddFailPoint(ctx context.Context, failPoint string, client *mongo.Client) error {

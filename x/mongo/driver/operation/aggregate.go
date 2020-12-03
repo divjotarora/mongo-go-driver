@@ -41,7 +41,7 @@ type Aggregate struct {
 	deployment               driver.Deployment
 	readConcern              *readconcern.ReadConcern
 	readPreference           *readpref.ReadPref
-	retry                    *driver.RetryMode
+	retry                    bool
 	selector                 description.ServerSelector
 	writeConcern             *writeconcern.WriteConcern
 	crypt                    *driver.Crypt
@@ -84,6 +84,7 @@ func (a *Aggregate) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "aggregate",
 		CommandFn:         a.command,
 		ProcessResponseFn: a.processResponse,
 
@@ -95,7 +96,7 @@ func (a *Aggregate) Execute(ctx context.Context) error {
 		ReadConcern:                    a.readConcern,
 		ReadPreference:                 a.readPreference,
 		Type:                           driver.Read,
-		RetryMode:                      a.retry,
+		Retry:                          a.retry,
 		Selector:                       a.selector,
 		WriteConcern:                   a.writeConcern,
 		Crypt:                          a.crypt,
@@ -335,12 +336,12 @@ func (a *Aggregate) WriteConcern(writeConcern *writeconcern.WriteConcern) *Aggre
 // Retry enables retryable writes for this operation. Retries are not handled automatically,
 // instead a boolean is returned from Execute and SelectAndExecute that indicates if the
 // operation can be retried. Retrying is handled by calling RetryExecute.
-func (a *Aggregate) Retry(retry driver.RetryMode) *Aggregate {
+func (a *Aggregate) Retry(retry bool) *Aggregate {
 	if a == nil {
 		a = new(Aggregate)
 	}
 
-	a.retry = &retry
+	a.retry = retry
 	return a
 }
 

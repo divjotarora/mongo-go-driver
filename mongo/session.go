@@ -170,9 +170,19 @@ func (s *sessionImpl) EndSession(ctx context.Context) {
 // WithTransaction implements the Session interface.
 func (s *sessionImpl) WithTransaction(ctx context.Context, fn func(sessCtx SessionContext) (interface{}, error),
 	opts ...*options.TransactionOptions) (interface{}, error) {
+
+	// TODO: should we check for context Done() wherever we check the timeout channel?
+
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
 	timeout := time.NewTimer(withTransactionTimeout)
 	defer timeout.Stop()
-	var err error
 	for {
 		err = s.StartTransaction(opts...)
 		if err != nil {
@@ -254,7 +264,17 @@ func (s *sessionImpl) StartTransaction(opts ...*options.TransactionOptions) erro
 
 // AbortTransaction implements the Session interface.
 func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
-	err := s.clientSession.CheckAbortTransaction()
+	// If this is being called from within WithTransaction and the global timeout option is set, the context will have
+	// a deadline on it already, so getOperationContext will be a no-op.
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
+	err = s.clientSession.CheckAbortTransaction()
 	if err != nil {
 		return err
 	}
@@ -269,7 +289,7 @@ func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
 	s.clientSession.Aborting = true
 	_ = operation.NewAbortTransaction().Session(s.clientSession).ClusterClock(s.client.clock).Database("admin").
 		Deployment(s.deployment).WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).
-		Retry(driver.RetryOncePerCommand).CommandMonitor(s.client.monitor).
+		Retry(true).CommandMonitor(s.client.monitor).
 		RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken)).Execute(ctx)
 
 	s.clientSession.Aborting = false
@@ -280,7 +300,17 @@ func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
 
 // CommitTransaction implements the Session interface.
 func (s *sessionImpl) CommitTransaction(ctx context.Context) error {
-	err := s.clientSession.CheckCommitTransaction()
+	// If this is being called from within WithTransaction and the global timeout option is set, the context will have
+	// a deadline on it already, so getOperationContext will be a no-op.
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
+	err = s.clientSession.CheckCommitTransaction()
 	if err != nil {
 		return err
 	}
@@ -300,7 +330,7 @@ func (s *sessionImpl) CommitTransaction(ctx context.Context) error {
 	s.clientSession.Committing = true
 	op := operation.NewCommitTransaction().
 		Session(s.clientSession).ClusterClock(s.client.clock).Database("admin").Deployment(s.deployment).
-		WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).Retry(driver.RetryOncePerCommand).
+		WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).Retry(true).
 		CommandMonitor(s.client.monitor).RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken))
 	if s.clientSession.CurrentMct != nil {
 		op.MaxTimeMS(int64(*s.clientSession.CurrentMct / time.Millisecond))

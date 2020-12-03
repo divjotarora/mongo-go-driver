@@ -27,6 +27,13 @@ func DocumentToRawValue(doc bson.Raw) bson.RawValue {
 	}
 }
 
+func RawValueToCoreValue(val bson.RawValue) bsoncore.Value {
+	return bsoncore.Value{
+		Type: val.Type,
+		Data: val.Value,
+	}
+}
+
 func RemoveFieldsFromDocument(doc bson.Raw, keys ...string) bson.Raw {
 	newDoc := bsoncore.NewDocumentBuilder()
 	elems, _ := doc.Elements()

@@ -189,11 +189,7 @@ func (bw *bulkWrite) runInsert(ctx context.Context, batch bulkWriteBatch) (opera
 		op = op.Ordered(*bw.ordered)
 	}
 
-	retry := driver.RetryNone
-	if bw.collection.client.retryWrites && batch.canRetry {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op.Retry(bw.collection.client.retryWrites && batch.canRetry)
 
 	err := op.Execute(ctx)
 
@@ -234,11 +230,7 @@ func (bw *bulkWrite) runDelete(ctx context.Context, batch bulkWriteBatch) (opera
 	if bw.ordered != nil {
 		op = op.Ordered(*bw.ordered)
 	}
-	retry := driver.RetryNone
-	if bw.collection.client.retryWrites && batch.canRetry {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(bw.collection.client.retryWrites && batch.canRetry)
 
 	err := op.Execute(ctx)
 
@@ -318,11 +310,7 @@ func (bw *bulkWrite) runUpdate(ctx context.Context, batch bulkWriteBatch) (opera
 	if bw.bypassDocumentValidation != nil && *bw.bypassDocumentValidation {
 		op = op.BypassDocumentValidation(*bw.bypassDocumentValidation)
 	}
-	retry := driver.RetryNone
-	if bw.collection.client.retryWrites && batch.canRetry {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(bw.collection.client.retryWrites && batch.canRetry)
 
 	err := op.Execute(ctx)
 

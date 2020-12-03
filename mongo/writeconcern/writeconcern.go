@@ -82,6 +82,7 @@ func J(j bool) Option {
 }
 
 // WTimeout specifies specifies a time limit for the write concern.
+// TODO deprecate
 func WTimeout(d time.Duration) Option {
 	return func(concern *WriteConcern) {
 		concern.wTimeout = d

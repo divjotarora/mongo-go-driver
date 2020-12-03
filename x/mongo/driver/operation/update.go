@@ -37,7 +37,7 @@ type Update struct {
 	arrayFilters             *bool
 	selector                 description.ServerSelector
 	writeConcern             *writeconcern.WriteConcern
-	retry                    *driver.RetryMode
+	retry                    bool
 	result                   UpdateResult
 	crypt                    *driver.Crypt
 }
@@ -148,10 +148,11 @@ func (u *Update) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "update",
 		CommandFn:         u.command,
 		ProcessResponseFn: u.processResponse,
 		Batches:           batches,
-		RetryMode:         u.retry,
+		Retry:             u.retry,
 		Type:              driver.Write,
 		Client:            u.session,
 		Clock:             u.clock,
@@ -334,12 +335,12 @@ func (u *Update) WriteConcern(writeConcern *writeconcern.WriteConcern) *Update {
 // Retry enables retryable writes for this operation. Retries are not handled automatically,
 // instead a boolean is returned from Execute and SelectAndExecute that indicates if the
 // operation can be retried. Retrying is handled by calling RetryExecute.
-func (u *Update) Retry(retry driver.RetryMode) *Update {
+func (u *Update) Retry(retry bool) *Update {
 	if u == nil {
 		u = new(Update)
 	}
 
-	u.retry = &retry
+	u.retry = retry
 	return u
 }
 

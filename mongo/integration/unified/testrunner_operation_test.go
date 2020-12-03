@@ -111,6 +111,8 @@ func executeTestRunnerOperation(ctx context.Context, operation *Operation) error
 		coll := LookupString(args, "collectionName")
 		index := LookupString(args, "indexName")
 		return verifyIndexExists(ctx, db, coll, index, false)
+	case "createEntities":
+		return executeCreateEntities(ctx, operation)
 	default:
 		return fmt.Errorf("unrecognized testRunner operation %q", operation.Name)
 	}
@@ -138,7 +140,7 @@ func verifyLastTwoLsidsEqual(ctx context.Context, clientID string, expectedEqual
 		return err
 	}
 
-	allEvents := client.StartedEvents()
+	allEvents := client.StartedEvents(nil)
 	if len(allEvents) < 2 {
 		return fmt.Errorf("client has recorded fewer than two command started events")
 	}
@@ -209,6 +211,27 @@ func verifyIndexExists(ctx context.Context, dbName, collName, indexName string, 
 		ns := fmt.Sprintf("%s.%s", dbName, collName)
 		return fmt.Errorf("index existence mismatch: expected index %q to exist in namespace %q: %v, exists: %v",
 			indexName, ns, expectedExists, exists)
+	}
+	return nil
+}
+
+func executeCreateEntities(ctx context.Context, operation *Operation) error {
+	entitiesVal, err := operation.Arguments.LookupErr("entities")
+	if err != nil {
+		return newMissingArgumentError("entities")
+	}
+
+	var entities []map[string]*EntityOptions
+	if err := entitiesVal.Unmarshal(&entities); err != nil {
+		return fmt.Errorf("error decoding 'entities' aray: %v", err)
+	}
+
+	for idx, entity := range entities {
+		for entityType, entityOptions := range entity {
+			if err := Entities(ctx).AddEntity(ctx, entityType, entityOptions); err != nil {
+				return fmt.Errorf("error creating entity at index %d: %v", idx, err)
+			}
+		}
 	}
 	return nil
 }

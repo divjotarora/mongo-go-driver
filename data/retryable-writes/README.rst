@@ -91,6 +91,11 @@ disabled like so::
         mode: "off"
     });
 
+Speeding Up Tests
+=================
+
+See `Speeding Up Tests <../../retryable-reads/tests/README.rst#speeding-up-tests>`_ in the retryable reads spec tests.
+
 Use as Integration Tests
 ========================
 
@@ -165,6 +170,10 @@ Each YAML file has the following keys:
   Each test will have some or all of the following fields:
 
   - ``description``: The name of the test.
+
+  - ``skipReason`` (optional): A string describing why the test should be
+    skipped. If present, the test must be skipped without executing any
+    operations or performing any assertions.
 
   - ``clientOptions``: Parameters to pass to MongoClient().
 
@@ -324,6 +333,8 @@ and sharded clusters.
 
 Changelog
 =========
+
+:2020-12-02: Add a test-level ``skipReason`` field
 
 :2019-10-21: Add ``errorLabelsContain`` and ``errorLabelsContain`` fields to ``result``
 

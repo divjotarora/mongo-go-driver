@@ -180,6 +180,9 @@ func VerifyConnStringOptions(t *testing.T, cs connstring.ConnString, options map
 			require.Equal(t, value, float64(cs.ZstdLevel))
 		case "tlsdisableocspendpointcheck":
 			require.Equal(t, value, cs.SSLDisableOCSPEndpointCheck)
+		case "timeoutms":
+			require.True(t, cs.TimeoutSet)
+			require.Equal(t, value, float64(cs.Timeout/time.Millisecond))
 		default:
 			opt, ok := cs.UnknownOptions[key]
 			require.True(t, ok)

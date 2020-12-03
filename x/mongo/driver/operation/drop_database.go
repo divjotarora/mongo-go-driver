@@ -79,6 +79,7 @@ func (dd *DropDatabase) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "dropDatabase",
 		CommandFn:         dd.command,
 		ProcessResponseFn: dd.processResponse,
 		Client:            dd.session,

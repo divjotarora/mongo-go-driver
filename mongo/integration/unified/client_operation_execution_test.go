@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	testhelpers "go.mongodb.org/mongo-driver/internal/testutil/helpers"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -88,9 +89,12 @@ func executeCreateChangeStream(ctx context.Context, operation *Operation) (*Oper
 	}
 
 	if operation.ResultEntityID == nil {
-		return nil, fmt.Errorf("no entity name provided to store executeChangeStream result")
+		_ = stream.Close(ctx)
+		return NewEmptyResult(), nil
 	}
-	if err := Entities(ctx).AddChangeStreamEntity(*operation.ResultEntityID, stream); err != nil {
+
+	iter := NewIteratorEntity(ctx, stream)
+	if err := Entities(ctx).AddIteratorEntity(*operation.ResultEntityID, iter); err != nil {
 		return nil, fmt.Errorf("error storing result as changeStream entity: %v", err)
 	}
 	return NewEmptyResult(), nil
@@ -102,29 +106,12 @@ func executeListDatabases(ctx context.Context, operation *Operation) (*Operation
 		return nil, err
 	}
 
-	// We set a default filter rather than erroring if the Arguments doc doesn't have a "filter" field because the
-	// spec says drivers should support this field, not must.
-	filter := emptyDocument
-	opts := options.ListDatabases()
-
-	elems, _ := operation.Arguments.Elements()
-	for _, elem := range elems {
-		key := elem.Key()
-		val := elem.Value()
-
-		switch key {
-		case "authorizedDatabases":
-			opts.SetAuthorizedDatabases(val.Boolean())
-		case "filter":
-			filter = val.Document()
-		case "nameOnly":
-			opts.SetNameOnly(val.Boolean())
-		default:
-			return nil, fmt.Errorf("unrecognized listDatabases option %q", key)
-		}
+	listDbsArgs, err := createListDatabasesArguments(operation.Arguments)
+	if err != nil {
+		return nil, err
 	}
 
-	res, err := client.ListDatabases(ctx, filter, opts)
+	res, err := client.ListDatabases(ctx, listDbsArgs.filter, listDbsArgs.opts)
 	if err != nil {
 		return NewErrorResult(err), nil
 	}
@@ -144,4 +131,27 @@ func executeListDatabases(ctx context.Context, operation *Operation) (*Operation
 		AppendInt64("totalSize", res.TotalSize).
 		Build()
 	return NewDocumentResult(raw, nil), nil
+}
+
+func executeListDatabaseNames(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	client, err := Entities(ctx).Client(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	listDbsArgs, err := createListDatabasesArguments(operation.Arguments)
+	if err != nil {
+		return nil, err
+	}
+
+	names, err := client.ListDatabaseNames(ctx, listDbsArgs.filter, listDbsArgs.opts)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	t, data, err := bson.MarshalValue(names)
+	if err != nil {
+		return nil, fmt.Errorf("error converting ListDatabaseNames result to raw BSON: %v", err)
+	}
+	return NewValueResult(t, data, nil), nil
 }

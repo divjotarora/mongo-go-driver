@@ -63,6 +63,7 @@ func (c *Create) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "create",
 		CommandFn:         c.command,
 		ProcessResponseFn: c.processResponse,
 		Client:            c.session,

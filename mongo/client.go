@@ -17,6 +17,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
@@ -41,6 +42,7 @@ var (
 				SetWriteConcern(writeconcern.New(writeconcern.WMajority()))
 
 	endSessionsBatchSize = 10000
+	errTimeoutConflict   = errors.New("the Timeout Client option cannot be used with SocketTimeout or a WriteConcern configured with WTimeout")
 )
 
 // Client is a handle representing a pool of connections to a MongoDB deployment. It is safe for concurrent use by
@@ -49,22 +51,25 @@ var (
 // The Client type opens and closes connections automatically and maintains a pool of idle connections. For
 // connection pool configuration options, see documentation for the ClientOptions type in the mongo/options package.
 type Client struct {
-	id              uuid.UUID
-	topologyOptions []topology.Option
-	deployment      driver.Deployment
-	connString      connstring.ConnString
-	localThreshold  time.Duration
-	retryWrites     bool
-	retryReads      bool
-	clock           *session.ClusterClock
-	readPreference  *readpref.ReadPref
-	readConcern     *readconcern.ReadConcern
-	writeConcern    *writeconcern.WriteConcern
-	registry        *bsoncodec.Registry
-	marshaller      BSONAppender
-	monitor         *event.CommandMonitor
-	serverMonitor   *event.ServerMonitor
-	sessionPool     *session.Pool
+	id                uuid.UUID
+	topologyOptions   []topology.Option
+	deployment        driver.Deployment
+	connString        connstring.ConnString
+	localThreshold    time.Duration
+	retryWrites       bool
+	retryReads        bool
+	clock             *session.ClusterClock
+	readPreference    *readpref.ReadPref
+	readConcern       *readconcern.ReadConcern
+	writeConcern      *writeconcern.WriteConcern
+	registry          *bsoncodec.Registry
+	marshaller        BSONAppender
+	monitor           *event.CommandMonitor
+	serverMonitor     *event.ServerMonitor
+	sessionPool       *session.Pool
+	connectTimeout    time.Duration
+	timeout           *time.Duration
+	legacyTimeoutUsed bool
 
 	// client-side encryption fields
 	keyVaultClient *Client
@@ -188,6 +193,7 @@ func (c *Client) Connect(ctx context.Context) error {
 // or write operations. If this method returns with no errors, all connections
 // associated with this Client have been closed.
 func (c *Client) Disconnect(ctx context.Context) error {
+	// TODO: should global timeout be applied here?
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -225,8 +231,12 @@ func (c *Client) Disconnect(ctx context.Context) error {
 // Using Ping reduces application resilience because applications starting up will error if the server is temporarily
 // unavailable or is failing over (e.g. during autoscaling due to a load spike).
 func (c *Client) Ping(ctx context.Context, rp *readpref.ReadPref) error {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, c, c.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	if rp == nil {
@@ -424,14 +434,16 @@ func (c *Client) configure(opts *options.ClientOptions) error {
 	}
 	connOpts = append(connOpts, topology.WithHandshaker(handshaker))
 	// ConnectTimeout
-	if opts.ConnectTimeout != nil {
-		serverOpts = append(serverOpts, topology.WithHeartbeatTimeout(
-			func(time.Duration) time.Duration { return *opts.ConnectTimeout },
-		))
-		connOpts = append(connOpts, topology.WithConnectTimeout(
-			func(time.Duration) time.Duration { return *opts.ConnectTimeout },
-		))
+	if opts.ConnectTimeout == nil {
+		return errors.New("the ConnectTimeout field for ClientOptions is unexpectedly nil")
 	}
+	c.connectTimeout = *opts.ConnectTimeout
+	serverOpts = append(serverOpts, topology.WithHeartbeatTimeout(
+		func(time.Duration) time.Duration { return *opts.ConnectTimeout },
+	))
+	connOpts = append(connOpts, topology.WithConnectTimeout(
+		func(time.Duration) time.Duration { return *opts.ConnectTimeout },
+	))
 	// Dialer
 	if opts.Dialer != nil {
 		connOpts = append(connOpts, topology.WithDialer(
@@ -588,6 +600,14 @@ func (c *Client) configure(opts *options.ClientOptions) error {
 		)
 	}
 
+	// Store information for new and legacy timeouts.
+	if opts.Timeout != nil {
+		c.timeout = opts.Timeout
+	}
+	if opts.SocketTimeout != nil || (opts.WriteConcern != nil && opts.WriteConcern.GetWTimeout() != 0) {
+		c.legacyTimeoutUsed = true
+	}
+
 	serverOpts = append(
 		serverOpts,
 		topology.WithClock(func(*session.ClusterClock) *session.ClusterClock { return c.clock }),
@@ -703,13 +723,17 @@ func (c *Client) Database(name string, opts ...*options.DatabaseOptions) *Databa
 //
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/listDatabases/.
 func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...*options.ListDatabasesOptions) (ListDatabasesResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, c, c.timeout, nil, nil)
+	if err != nil {
+		return ListDatabasesResult{}, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 
-	err := c.validSession(sess)
+	err = c.validSession(sess)
 	if sess == nil && c.sessionPool != nil {
 		sess, err = session.NewClientSession(c.sessionPool, c.id, session.Implicit)
 		if err != nil {
@@ -746,11 +770,7 @@ func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...
 		op = op.AuthorizedDatabases(*ldo.AuthorizedDatabases)
 	}
 
-	retry := driver.RetryNone
-	if c.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op.Retry(retry)
+	op.Retry(c.retryReads)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -847,6 +867,7 @@ func (c *Client) Watch(ctx context.Context, pipeline interface{},
 		registry:       c.registry,
 		streamType:     ClientStream,
 		crypt:          c.crypt,
+		timeout:        c.timeout,
 	}
 
 	return newChangeStream(ctx, csConfig, pipeline, opts...)
@@ -856,4 +877,30 @@ func (c *Client) Watch(ctx context.Context, pipeline interface{},
 // closed (i.e. EndSession has not been called).
 func (c *Client) NumberSessionsInProgress() int {
 	return c.sessionPool.CheckedOut()
+}
+
+func getOperationContext(ctx context.Context, client *Client, timeout, maxTime, maxCommitTime *time.Duration) (context.Context, context.CancelFunc, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	_, ctxHasDeadline := ctx.Deadline()
+	if timeout == nil && !ctxHasDeadline {
+		return ctx, nil, nil
+	}
+
+	if (client != nil && client.legacyTimeoutUsed) || maxTime != nil || maxCommitTime != nil {
+		return ctx, nil, errTimeoutConflict
+	}
+
+	if ctxHasDeadline {
+		return ctx, nil, nil
+	}
+
+	if *timeout == 0 {
+		return internal.NewBackgroundContext(ctx), nil, nil
+	}
+
+	newCtx, cancel := internal.NewContextWithTimeout(ctx, *timeout)
+	return newCtx, cancel, nil
 }

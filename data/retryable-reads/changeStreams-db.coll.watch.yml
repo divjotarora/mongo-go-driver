@@ -25,7 +25,7 @@ tests:
                     command:
                         aggregate: *collection_name
                         cursor: {}
-                        pipeline: [ { $changeStream: { fullDocument: "default" } } ]
+                        pipeline: [ { $changeStream: { } } ]
                     database_name: *database_name
     -
         description: "db.coll.watch succeeds on second attempt"
@@ -41,6 +41,15 @@ tests:
              - *retryable_command_started_event
              - *retryable_command_started_event
     -
+        description: "db.coll.watch succeeds on third attempt"
+        failPoint:
+            <<: *failCommand_failPoint
+            mode: { times: 2 }
+        operations: [*retryable_operation]
+        expectations:
+             - *retryable_command_started_event
+             - *retryable_command_started_event
+    -
         description: "db.coll.watch fails on first attempt"
         clientOptions:
             retryReads: false
@@ -51,15 +60,3 @@ tests:
                 error: true
         expectations:
              - *retryable_command_started_event
-    -
-        description: "db.coll.watch fails on second attempt"
-        failPoint:
-            <<: *failCommand_failPoint
-            mode: { times: 2 }
-        operations: [*retryable_operation_fails]
-        expectations:
-             - *retryable_command_started_event
-             - *retryable_command_started_event
-
-
-

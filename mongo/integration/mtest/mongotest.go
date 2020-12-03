@@ -451,8 +451,8 @@ func (t *T) ClearCollections() {
 	t.createdColls = t.createdColls[:0]
 }
 
-// SetFailPoint sets a fail point for the client associated with T. Commands to create the failpoint will appear
-// in command monitoring channels. The fail point will automatically be disabled after this test has run.
+// SetFailPoint sets a fail point for the client associated with T. The fail point will automatically be disabled after
+// this test has run.
 func (t *T) SetFailPoint(fp FailPoint) {
 	// ensure mode fields are int32
 	if modeMap, ok := fp.Mode.(map[string]interface{}); ok {
@@ -473,18 +473,17 @@ func (t *T) SetFailPoint(fp FailPoint) {
 		}
 	}
 
-	if err := SetFailPoint(fp, t.Client); err != nil {
+	if err := SetFailPoint(fp, GlobalClient()); err != nil {
 		t.Fatal(err)
 	}
 	t.failPointNames = append(t.failPointNames, fp.ConfigureFailPoint)
 }
 
 // SetFailPointFromDocument sets the fail point represented by the given document for the client associated with T. This
-// method assumes that the given document is in the form {configureFailPoint: <failPointName>, ...}. Commands to create
-// the failpoint will appear in command monitoring channels. The fail point will be automatically disabled after this
-// test has run.
+// method assumes that the given document is in the form {configureFailPoint: <failPointName>, ...}. The fail point will
+// be automatically disabled after this test has run.
 func (t *T) SetFailPointFromDocument(fp bson.Raw) {
-	if err := SetRawFailPoint(fp, t.Client); err != nil {
+	if err := SetRawFailPoint(fp, GlobalClient()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -500,7 +499,7 @@ func (t *T) TrackFailPoint(fpName string) {
 
 // ClearFailPoints disables all previously set failpoints for this test.
 func (t *T) ClearFailPoints() {
-	db := t.Client.Database("admin")
+	db := GlobalClient().Database("admin")
 	for _, fp := range t.failPointNames {
 		cmd := bson.D{
 			{"configureFailPoint", fp},

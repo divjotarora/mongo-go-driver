@@ -501,7 +501,7 @@
       ]
     },
     {
-      "description": "Count fails after two NotMaster errors",
+      "description": "Count succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -521,7 +521,7 @@
           "arguments": {
             "filter": {}
           },
-          "error": true
+          "result": 2
         }
       ],
       "expectations": [

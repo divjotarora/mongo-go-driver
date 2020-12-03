@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -22,10 +23,6 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage"
 )
 
-const defaultLocalThreshold = 15 * time.Millisecond
-
-var dollarCmd = [...]byte{'.', '$', 'c', 'm', 'd'}
-
 var (
 	// ErrNoDocCommandResponse occurs when the server indicated a response existed, but none was found.
 	ErrNoDocCommandResponse = errors.New("command returned no documents")
@@ -35,6 +32,15 @@ var (
 	ErrReplyDocumentMismatch = errors.New("number of documents returned does not match numberReturned field")
 	// ErrNonPrimaryReadPref is returned when a read is attempted in a transaction with a non-primary read preference.
 	ErrNonPrimaryReadPref = errors.New("read preference in a transaction must be primary")
+
+	dollarCmd             = [...]byte{'.', '$', 'c', 'm', 'd'}
+	skipMaxTimeMSCommands = map[string]struct{}{
+		"aggregate":       {},
+		"find":            {},
+		"listCollections": {},
+		"listIndexes":     {},
+		"getMore":         {},
+	}
 )
 
 const (
@@ -42,6 +48,8 @@ const (
 	cryptMaxBsonObjectSize uint32 = 2097152
 	// minimum wire version necessary to use automatic encryption
 	cryptMinWireVersion int32 = 8
+	// default localThresholdMS value for server selection
+	defaultLocalThreshold = 15 * time.Millisecond
 )
 
 // InvalidOperationError is returned from Validate and indicates that a required field is missing
@@ -89,12 +97,15 @@ type finishedInformation struct {
 // the selected server, read a response from that connection, process the response, and potentially
 // retry.
 //
-// The required fields are Database, CommandFn, and Deployment. All other fields are optional.
+// The required fields are CommandName, Database, CommandFn, and Deployment. All other fields are optional.
 //
 // While an Operation can be constructed manually, drivergen should be used to generate an
 // implementation of an operation instead. This will ensure that there are helpers for constructing
 // the operation and that this type isn't configured incorrectly.
 type Operation struct {
+	// CommandName is the name of the command being executed. This field is required.
+	CommandName string
+
 	// CommandFn is used to create the command that will be wrapped in a wire message and sent to
 	// the server. This function should only add the elements of the command and not start or end
 	// the enclosing BSON document. Per the command API, the first element must be the name of the
@@ -155,10 +166,9 @@ type Operation struct {
 	// cluster clocks to be only updated as far as the last command that's been run.
 	Clock *session.ClusterClock
 
-	// RetryMode specifies how to retry. There are three modes that enable retry: RetryOnce,
-	// RetryOncePerCommand, and RetryContext. For more information about what these modes do, please
-	// refer to their definitions. Both RetryMode and Type must be set for retryability to be enabled.
-	RetryMode *RetryMode
+	// Retry specifies whether or not the operation is retryable. If set to true, the operation will be
+	// retried indefinitely until it either succeeds or the context supplied to the Execute function expires.
+	Retry bool
 
 	// Type specifies the kind of operation this is. There is only one mode that enables retry: Write.
 	// For more information about what this mode does, please refer to it's definition. Both Type and
@@ -212,6 +222,9 @@ func (op Operation) selectServer(ctx context.Context) (Server, error) {
 
 // Validate validates this operation, ensuring the fields are set properly.
 func (op Operation) Validate() error {
+	if op.CommandName == "" {
+		return InvalidOperationError{MissingField: "CommandName"}
+	}
 	if op.CommandFn == nil {
 		return InvalidOperationError{MissingField: "CommandFn"}
 	}
@@ -230,6 +243,7 @@ func (op Operation) Validate() error {
 // Execute runs this operation. The scratch parameter will be used and overwritten (potentially many
 // times), this should mainly be used to enable pooling of byte slices.
 func (op Operation) Execute(ctx context.Context, scratch []byte) error {
+	_, ctxHasDeadline := ctx.Deadline()
 	err := op.Validate()
 	if err != nil {
 		return err
@@ -271,41 +285,21 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 	var res bsoncore.Document
 	var operationErr WriteCommandError
 	var original error
-	var retries int
-	retryable := op.retryable(desc.Server)
-	if retryable && op.RetryMode != nil {
-		switch op.Type {
-		case Write:
-			if op.Client == nil {
-				break
-			}
-			switch *op.RetryMode {
-			case RetryOnce, RetryOncePerCommand:
-				retries = 1
-			case RetryContext:
-				retries = -1
-			}
+	var socketTimeoutCount int
+	retryableForServerDesc := op.retryable(desc.Server)
+	batching := op.Batches.Valid()
+	currIndex := 0
 
-			op.Client.RetryWrite = false
-			if *op.RetryMode > RetryNone {
-				op.Client.RetryWrite = true
-				if !op.Client.Committing && !op.Client.Aborting {
-					op.Client.IncrementTxnNumber()
-				}
-			}
-
-		case Read:
-			switch *op.RetryMode {
-			case RetryOnce, RetryOncePerCommand:
-				retries = 1
-			case RetryContext:
-				retries = -1
+	if op.Client != nil && retryableForServerDesc {
+		op.Client.RetryWrite = false
+		if op.Type == Write && op.Retry {
+			op.Client.RetryWrite = true
+			if !op.Client.Committing && !op.Client.Aborting {
+				op.Client.IncrementTxnNumber()
 			}
 		}
 	}
-	batching := op.Batches.Valid()
-	retryEnabled := op.RetryMode != nil && op.RetryMode.Enabled()
-	currIndex := 0
+
 	for {
 		if batching {
 			targetBatchSize := desc.MaxDocumentSize
@@ -377,7 +371,7 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 		var perr error
 		switch tt := err.(type) {
 		case WriteCommandError:
-			if e := err.(WriteCommandError); retryable && op.Type == Write && e.UnsupportedStorageEngine() {
+			if retryableForServerDesc && op.Type == Write && tt.UnsupportedStorageEngine() {
 				return ErrUnsupportedStorageEngine
 			}
 
@@ -387,12 +381,11 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 			inTransaction := !(op.Client.Committing || op.Client.Aborting) && op.Client.TransactionRunning()
 			// If retry is enabled and the operation isn't in a transaction, add a RetryableWriteError label for
 			// retryable errors from pre-4.4 servers
-			if retryableErr && preRetryWriteLabelVersion && retryEnabled && !inTransaction {
+			if retryableErr && preRetryWriteLabelVersion && op.Retry && !inTransaction {
 				tt.Labels = append(tt.Labels, RetryableWriteError)
 			}
 
-			if retryable && retryableErr && retries != 0 {
-				retries--
+			if retryableForServerDesc && retryableErr && op.Retry {
 				original, err = err, nil
 				conn.Close() // Avoid leaking the connection.
 				srvr, err = op.selectServer(ctx)
@@ -444,7 +437,7 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 				if err.Code != unknownReplWriteConcernCode && err.Code != unsatisfiableWriteConcernCode {
 					err.Labels = append(err.Labels, UnknownTransactionCommitResult)
 				}
-				if retryableErr && retryEnabled {
+				if retryableErr && op.Retry {
 					err.Labels = append(err.Labels, RetryableWriteError)
 				}
 				return err
@@ -456,8 +449,14 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 			if tt.HasErrorLabel(TransientTransactionError) || tt.HasErrorLabel(UnknownTransactionCommitResult) {
 				op.Client.ClearPinnedServer()
 			}
-			if e := err.(Error); retryable && op.Type == Write && e.UnsupportedStorageEngine() {
+			if retryableForServerDesc && op.Type == Write && tt.UnsupportedStorageEngine() {
 				return ErrUnsupportedStorageEngine
+			}
+
+			// TODO remove use of errors.As
+			var netErr net.Error
+			if !ctxHasDeadline && errors.As(tt, &netErr) && netErr.Timeout() {
+				socketTimeoutCount++
 			}
 
 			connDesc := conn.Description()
@@ -468,7 +467,7 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 				inTransaction := !(op.Client.Committing || op.Client.Aborting) && op.Client.TransactionRunning()
 				// If retryWrites is enabled and the operation isn't in a transaction, add a RetryableWriteError label
 				// for network errors and retryable errors from pre-4.4 servers
-				if retryEnabled && !inTransaction &&
+				if op.Retry && !inTransaction &&
 					(tt.HasErrorLabel(NetworkError) || (retryableErr && preRetryWriteLabelVersion)) {
 					tt.Labels = append(tt.Labels, RetryableWriteError)
 				}
@@ -476,8 +475,9 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 				retryableErr = tt.RetryableRead()
 			}
 
-			if retryable && retryableErr && retries != 0 {
-				retries--
+			// Socket timeouts caused by using the legacy socketTimeoutMS option can only be retried once. After the
+			// second, the error is no longer considered retryable.
+			if socketTimeoutCount < 2 && retryableForServerDesc && retryableErr && op.Retry {
 				original, err = err, nil
 				conn.Close() // Avoid leaking the connection.
 				srvr, err = op.selectServer(ctx)
@@ -528,13 +528,8 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 		}
 
 		if batching && len(op.Batches.Documents) > 0 {
-			if retryable && op.Client != nil && op.RetryMode != nil {
-				if *op.RetryMode > RetryNone {
-					op.Client.IncrementTxnNumber()
-				}
-				if *op.RetryMode == RetryOncePerCommand {
-					retries = 1
-				}
+			if retryableForServerDesc && op.Client != nil && op.Retry {
+				op.Client.IncrementTxnNumber()
 			}
 			currIndex += len(op.Batches.Current)
 			op.Batches.ClearBatch()
@@ -707,7 +702,7 @@ func (op Operation) createWireMessage(ctx context.Context, dst []byte,
 	desc description.SelectedServer, conn Connection) ([]byte, startedInformation, error) {
 
 	if desc.WireVersion == nil || desc.WireVersion.Max < wiremessage.OpmsgWireVersion {
-		return op.createQueryWireMessage(dst, desc)
+		return op.createQueryWireMessage(ctx, dst, desc)
 	}
 	return op.createMsgWireMessage(ctx, dst, desc, conn)
 }
@@ -721,7 +716,23 @@ func (op Operation) addBatchArray(dst []byte) []byte {
 	return dst
 }
 
-func (op Operation) createQueryWireMessage(dst []byte, desc description.SelectedServer) ([]byte, startedInformation, error) {
+func (op Operation) addMaxTimeMS(ctx context.Context, dst []byte) []byte {
+	if _, ok := skipMaxTimeMSCommands[op.CommandName]; ok {
+		return dst
+	}
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return dst
+	}
+
+	// TODO: account for server RTT
+
+	dst = bsoncore.AppendInt64Element(dst, "maxTimeMS", time.Until(deadline).Milliseconds())
+	return dst
+}
+
+func (op Operation) createQueryWireMessage(ctx context.Context, dst []byte, desc description.SelectedServer) ([]byte, startedInformation, error) {
 	var info startedInformation
 	flags := op.slaveOK(desc)
 	var wmindex int32
@@ -749,6 +760,7 @@ func (op Operation) createQueryWireMessage(dst []byte, desc description.Selected
 	if err != nil {
 		return dst, info, err
 	}
+	dst = op.addMaxTimeMS(ctx, dst)
 
 	if op.Batches != nil && len(op.Batches.Current) > 0 {
 		dst = op.addBatchArray(dst)
@@ -841,6 +853,7 @@ func (op Operation) createMsgWireMessage(ctx context.Context, dst []byte, desc d
 		dst = bsoncore.AppendDocumentElement(dst, "$readPreference", rp)
 	}
 
+	dst = op.addMaxTimeMS(ctx, dst)
 	dst, _ = bsoncore.AppendDocumentEnd(dst, idx)
 	// The command document for monitoring shouldn't include the type 1 payload as a document sequence
 	info.cmd = dst[idx:]

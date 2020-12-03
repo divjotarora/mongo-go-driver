@@ -44,7 +44,7 @@ type FindAndModify struct {
 	deployment               driver.Deployment
 	selector                 description.ServerSelector
 	writeConcern             *writeconcern.WriteConcern
-	retry                    *driver.RetryMode
+	retry                    bool
 	crypt                    *driver.Crypt
 	hint                     bsoncore.Value
 
@@ -122,10 +122,11 @@ func (fam *FindAndModify) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "findAndModify",
 		CommandFn:         fam.command,
 		ProcessResponseFn: fam.processResponse,
 
-		RetryMode:      fam.retry,
+		Retry:          fam.retry,
 		Type:           driver.Write,
 		Client:         fam.session,
 		Clock:          fam.clock,
@@ -398,12 +399,12 @@ func (fam *FindAndModify) WriteConcern(writeConcern *writeconcern.WriteConcern) 
 // Retry enables retryable writes for this operation. Retries are not handled automatically,
 // instead a boolean is returned from Execute and SelectAndExecute that indicates if the
 // operation can be retried. Retrying is handled by calling RetryExecute.
-func (fam *FindAndModify) Retry(retry driver.RetryMode) *FindAndModify {
+func (fam *FindAndModify) Retry(retry bool) *FindAndModify {
 	if fam == nil {
 		fam = new(FindAndModify)
 	}
 
-	fam.retry = &retry
+	fam.retry = retry
 	return fam
 }
 

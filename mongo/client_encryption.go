@@ -20,6 +20,8 @@ import (
 	cryptOpts "go.mongodb.org/mongo-driver/x/mongo/driver/mongocrypt/options"
 )
 
+// TODO: how does timeoutMS work for ClientEncryption?
+
 // ClientEncryption is used to create data keys and explicitly encrypt and decrypt BSON values.
 type ClientEncryption struct {
 	crypt          *driver.Crypt

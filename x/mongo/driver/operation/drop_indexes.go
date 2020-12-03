@@ -84,6 +84,7 @@ func (di *DropIndexes) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "dropIndexes",
 		CommandFn:         di.command,
 		ProcessResponseFn: di.processResponse,
 		Client:            di.session,

@@ -32,7 +32,7 @@ type ListCollections struct {
 	deployment     driver.Deployment
 	readPreference *readpref.ReadPref
 	selector       description.ServerSelector
-	retry          *driver.RetryMode
+	retry          bool
 	result         driver.CursorResponse
 	batchSize      *int32
 }
@@ -70,9 +70,10 @@ func (lc *ListCollections) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "listCollections",
 		CommandFn:         lc.command,
 		ProcessResponseFn: lc.processResponse,
-		RetryMode:         lc.retry,
+		Retry:             lc.retry,
 		Type:              driver.Read,
 		Client:            lc.session,
 		Clock:             lc.clock,
@@ -207,12 +208,12 @@ func (lc *ListCollections) ServerSelector(selector description.ServerSelector) *
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (lc *ListCollections) Retry(retry driver.RetryMode) *ListCollections {
+func (lc *ListCollections) Retry(retry bool) *ListCollections {
 	if lc == nil {
 		lc = new(ListCollections)
 	}
 
-	lc.retry = &retry
+	lc.retry = retry
 	return lc
 }
 

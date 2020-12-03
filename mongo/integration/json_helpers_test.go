@@ -7,6 +7,8 @@
 package integration
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -104,6 +106,9 @@ func createClientOptions(t testing.TB, opts bson.Raw) *options.ClientOptions {
 		case "serverSelectionTimeoutMS":
 			sst := convertValueToMilliseconds(t, opt)
 			clientOpts.SetServerSelectionTimeout(sst)
+		case "timeoutMS":
+			timeout := convertValueToMilliseconds(t, opt)
+			clientOpts.SetTimeout(timeout)
 		default:
 			t.Fatalf("unrecognized client option: %v", name)
 		}
@@ -409,7 +414,7 @@ func errorFromResult(t testing.TB, result interface{}) *operationError {
 		return nil
 	}
 	if expected.ErrorCodeName == nil && expected.ErrorContains == nil && len(expected.ErrorLabelsOmit) == 0 &&
-		len(expected.ErrorLabelsContain) == 0 {
+		len(expected.ErrorLabelsContain) == 0 && expected.IsTimeoutError == nil {
 		return nil
 	}
 
@@ -473,6 +478,15 @@ func verifyError(expected *operationError, actual error) error {
 		amsg := strings.ToLower(actual.Error())
 		if !strings.Contains(amsg, emsg) {
 			return fmt.Errorf("expected error message %q to contain %q", amsg, emsg)
+		}
+	}
+
+	// check IsTimeoutError for all error types
+	if expected.IsTimeoutError != nil {
+		isTimeoutError := errors.Is(actual, context.DeadlineExceeded)
+		if *expected.IsTimeoutError != isTimeoutError {
+			return fmt.Errorf("expected error %v to be a timeout: %v, is timeout: %v", actual,
+				*expected.IsTimeoutError, isTimeoutError)
 		}
 	}
 

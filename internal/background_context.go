@@ -6,7 +6,10 @@
 
 package internal
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // backgroundContext is an implementation of the context.Context interface that wraps a child Context. Value requests
 // are forwarded to the child Context but the Done and Err functions are overridden to ensure the new context does not
@@ -27,6 +30,16 @@ func NewBackgroundContext(ctx context.Context) context.Context {
 		Context:        context.Background(),
 		childValuesCtx: ctx,
 	}
+}
+
+func NewContextWithTimeout(valuesCtx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	wrapped := &backgroundContext{
+		Context:        ctx,
+		childValuesCtx: valuesCtx,
+	}
+
+	return wrapped, cancel
 }
 
 func (b *backgroundContext) Value(key interface{}) interface{} {

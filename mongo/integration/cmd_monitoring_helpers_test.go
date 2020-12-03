@@ -17,6 +17,16 @@ import (
 	"go.mongodb.org/mongo-driver/event"
 	"go.mongodb.org/mongo-driver/internal/testutil/assert"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
+	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
+)
+
+var (
+	cursorCreatingCommands = map[string]struct{}{
+		"aggregate":       {},
+		"find":            {},
+		"listCollections": {},
+		"listIndexes":     {},
+	}
 )
 
 // Helper functions to compare BSON values and command monitoring expectations.
@@ -80,7 +90,7 @@ func compareValues(mt *mtest.T, key string, expected, actual bson.RawValue) erro
 		if typeVal, err := e.LookupErr("$$type"); err == nil {
 			// $$type represents a type assertion
 			// for example {field: {$$type: "binData"}} should assert that "field" is an element with a binary value
-			return checkValueType(mt, key, actual.Type, typeVal.StringValue())
+			return checkValueType(mt, key, actual.Type, typeVal)
 		}
 
 		a := actual.Document()
@@ -101,61 +111,99 @@ func compareValues(mt *mtest.T, key string, expected, actual bson.RawValue) erro
 }
 
 // helper for $$type assertions
-func checkValueType(mt *mtest.T, key string, actual bsontype.Type, typeStr string) error {
+func checkValueType(mt *mtest.T, key string, actual bsontype.Type, typeVal bson.RawValue) error {
 	mt.Helper()
 
-	var expected bsontype.Type
-	switch typeStr {
-	case "double":
-		expected = bsontype.Double
-	case "string":
-		expected = bsontype.String
-	case "object":
-		expected = bsontype.EmbeddedDocument
-	case "array":
-		expected = bsontype.Array
-	case "binData":
-		expected = bsontype.Binary
-	case "undefined":
-		expected = bsontype.Undefined
-	case "objectId":
-		expected = bsontype.ObjectID
-	case "boolean":
-		expected = bsontype.Boolean
-	case "date":
-		expected = bsontype.DateTime
-	case "null":
-		expected = bsontype.Null
-	case "regex":
-		expected = bsontype.Regex
-	case "dbPointer":
-		expected = bsontype.DBPointer
-	case "javascript":
-		expected = bsontype.JavaScript
-	case "symbol":
-		expected = bsontype.Symbol
-	case "javascriptWithScope":
-		expected = bsontype.CodeWithScope
-	case "int":
-		expected = bsontype.Int32
-	case "timestamp":
-		expected = bsontype.Timestamp
-	case "long":
-		expected = bsontype.Int64
-	case "decimal":
-		expected = bsontype.Decimal128
-	case "minKey":
-		expected = bsontype.MinKey
-	case "maxKey":
-		expected = bsontype.MaxKey
-	default:
-		mt.Fatalf("unrecognized type string: %v", typeStr)
+	possibleTypes, err := getTypesArray(typeVal)
+	if err != nil {
+		return fmt.Errorf("error getting array of types: %v", err)
 	}
 
-	if expected != actual {
-		return fmt.Errorf("BSON type mismatch for key %s; expected %s, got %s", key, expected, actual)
+	for _, possibleType := range possibleTypes {
+		if actual == possibleType {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("expected type to be one of %v but was %s", possibleTypes, actual)
+}
+
+func getTypesArray(val bson.RawValue) ([]bsontype.Type, error) {
+	switch val.Type {
+	case bsontype.String:
+		convertedType, err := convertStringToBSONType(val.StringValue())
+		if err != nil {
+			return nil, err
+		}
+
+		return []bsontype.Type{convertedType}, nil
+	case bsontype.Array:
+		var typeStrings []string
+		if err := val.Unmarshal(&typeStrings); err != nil {
+			return nil, fmt.Errorf("error unmarshalling to slice of strings: %v", err)
+		}
+
+		var types []bsontype.Type
+		for _, typeStr := range typeStrings {
+			convertedType, err := convertStringToBSONType(typeStr)
+			if err != nil {
+				return nil, err
+			}
+
+			types = append(types, convertedType)
+		}
+		return types, nil
+	default:
+		return nil, fmt.Errorf("invalid type to convert to bsontype.Type slice: %s", val.Type)
+	}
+}
+
+func convertStringToBSONType(typeStr string) (bsontype.Type, error) {
+	switch typeStr {
+	case "double":
+		return bsontype.Double, nil
+	case "string":
+		return bsontype.String, nil
+	case "object":
+		return bsontype.EmbeddedDocument, nil
+	case "array":
+		return bsontype.Array, nil
+	case "binData":
+		return bsontype.Binary, nil
+	case "undefined":
+		return bsontype.Undefined, nil
+	case "objectId":
+		return bsontype.ObjectID, nil
+	case "boolean":
+		return bsontype.Boolean, nil
+	case "date":
+		return bsontype.DateTime, nil
+	case "null":
+		return bsontype.Null, nil
+	case "regex":
+		return bsontype.Regex, nil
+	case "dbPointer":
+		return bsontype.DBPointer, nil
+	case "javascript":
+		return bsontype.JavaScript, nil
+	case "symbol":
+		return bsontype.Symbol, nil
+	case "javascriptWithScope":
+		return bsontype.CodeWithScope, nil
+	case "int":
+		return bsontype.Int32, nil
+	case "timestamp":
+		return bsontype.Timestamp, nil
+	case "long":
+		return bsontype.Int64, nil
+	case "decimal":
+		return bsontype.Decimal128, nil
+	case "minKey":
+		return bsontype.MinKey, nil
+	case "maxKey":
+		return bsontype.MaxKey, nil
+	default:
+		return bsontype.Type(0), fmt.Errorf("unrecognized BSON type string %q", typeStr)
+	}
 }
 
 // compare expected and actual BSON documents. comparison succeeds if actual contains each element in expected.
@@ -252,6 +300,22 @@ func checkExpectations(mt *mtest.T, expectations *[]*expectation, id0, id1 bson.
 	}
 }
 
+func fixMaxTimeMS(commandName string, expectedCommand, actualCommand bson.Raw) bson.Raw {
+	if _, ok := cursorCreatingCommands[commandName]; !ok {
+		return actualCommand
+	}
+
+	expectedVal, err := expectedCommand.LookupErr("maxTimeMS")
+	if err != nil || expectedVal.IsNumber() {
+		return actualCommand
+	}
+
+	actualCommand = actualCommand[:len(actualCommand)-1]
+	actualCommand = bsoncore.AppendInt64Element(actualCommand, "maxTimeMS", 1)
+	actualCommand, _ = bsoncore.AppendDocumentEnd(actualCommand, 0)
+	return actualCommand
+}
+
 func compareStartedEvent(mt *mtest.T, expectation *expectation, id0, id1 bson.Raw) error {
 	mt.Helper()
 
@@ -260,6 +324,7 @@ func compareStartedEvent(mt *mtest.T, expectation *expectation, id0, id1 bson.Ra
 	if evt == nil {
 		return errors.New("expected CommandStartedEvent, got nil")
 	}
+	actualCommand := fixMaxTimeMS(expected.CommandName, expected.Command, evt.Command)
 
 	if expected.CommandName != "" && expected.CommandName != evt.CommandName {
 		return fmt.Errorf("command name mismatch; expected %s, got %s", expected.CommandName, evt.CommandName)
@@ -277,7 +342,7 @@ func compareStartedEvent(mt *mtest.T, expectation *expectation, id0, id1 bson.Ra
 		key := elem.Key()
 		val := elem.Value()
 
-		actualVal, err := evt.Command.LookupErr(key)
+		actualVal, err := actualCommand.LookupErr(key)
 
 		// Keys that may be nil
 		if val.Type == bson.TypeNull {

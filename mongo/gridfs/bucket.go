@@ -47,6 +47,7 @@ type Bucket struct {
 	wc        *writeconcern.WriteConcern
 	rc        *readconcern.ReadConcern
 	rp        *readpref.ReadPref
+	timeout   *time.Duration
 
 	firstWriteDone bool
 	readBuf        []byte
@@ -71,6 +72,7 @@ func NewBucket(db *mongo.Database, opts ...*options.BucketOptions) (*Bucket, err
 		wc:        db.WriteConcern(),
 		rc:        db.ReadConcern(),
 		rp:        db.ReadPreference(),
+		timeout:   db.Timeout(),
 	}
 
 	bo := options.MergeBucketOptions(opts...)
@@ -119,7 +121,12 @@ func (b *Bucket) OpenUploadStream(filename string, opts ...*options.UploadOption
 
 // OpenUploadStreamWithID creates a new upload stream for a file given the file ID and filename.
 func (b *Bucket) OpenUploadStreamWithID(fileID interface{}, filename string, opts ...*options.UploadOptions) (*UploadStream, error) {
-	ctx, cancel := deadlineContext(b.writeDeadline)
+	deadline, err := b.getOperationDeadline(b.writeDeadline)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -133,7 +140,12 @@ func (b *Bucket) OpenUploadStreamWithID(fileID interface{}, filename string, opt
 		return nil, err
 	}
 
-	return newUploadStream(upload, fileID, filename, b.chunksColl, b.filesColl), nil
+	stream := newUploadStream(upload, fileID, filename, b.chunksColl, b.filesColl)
+	if err := stream.SetWriteDeadline(deadline); err != nil {
+		_ = stream.Close()
+		return nil, err
+	}
+	return stream, nil
 }
 
 // UploadFromStream creates a fileID and uploads a file given a source stream.
@@ -156,11 +168,12 @@ func (b *Bucket) UploadFromStreamWithID(fileID interface{}, filename string, sou
 		return err
 	}
 
-	err = us.SetWriteDeadline(b.writeDeadline)
-	if err != nil {
-		_ = us.Close()
-		return err
-	}
+	// TODO: confirm we don't need to set deadline here?
+	// err = us.SetWriteDeadline(b.writeDeadline)
+	// if err != nil {
+	// 	_ = us.Close()
+	// 	return err
+	// }
 
 	for {
 		n, err := source.Read(b.readBuf)
@@ -249,7 +262,12 @@ func (b *Bucket) DownloadToStreamByName(filename string, stream io.Writer, opts 
 func (b *Bucket) Delete(fileID interface{}) error {
 	// delete document in files collection and then chunks to minimize race conditions
 
-	ctx, cancel := deadlineContext(b.writeDeadline)
+	deadline, err := b.getOperationDeadline(b.writeDeadline)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -275,7 +293,12 @@ func (b *Bucket) Delete(fileID interface{}) error {
 // If this download requires a custom read deadline to be set on the bucket, it cannot be done concurrently with other
 // read operations operations on this bucket that also require a custom deadline.
 func (b *Bucket) Find(filter interface{}, opts ...*options.GridFSFindOptions) (*mongo.Cursor, error) {
-	ctx, cancel := deadlineContext(b.readDeadline)
+	deadline, err := b.getOperationDeadline(b.readDeadline)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -312,7 +335,12 @@ func (b *Bucket) Find(filter interface{}, opts ...*options.GridFSFindOptions) (*
 // If this operation requires a custom write deadline to be set on the bucket, it cannot be done concurrently with other
 // write operations operations on this bucket that also require a custom deadline
 func (b *Bucket) Rename(fileID interface{}, newFilename string) error {
-	ctx, cancel := deadlineContext(b.writeDeadline)
+	deadline, err := b.getOperationDeadline(b.writeDeadline)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -341,12 +369,17 @@ func (b *Bucket) Rename(fileID interface{}, newFilename string) error {
 // If this operation requires a custom write deadline to be set on the bucket, it cannot be done concurrently with other
 // write operations operations on this bucket that also require a custom deadline
 func (b *Bucket) Drop() error {
-	ctx, cancel := deadlineContext(b.writeDeadline)
+	deadline, err := b.getOperationDeadline(b.writeDeadline)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
 
-	err := b.filesColl.Drop(ctx)
+	err = b.filesColl.Drop(ctx)
 	if err != nil {
 		return err
 	}
@@ -365,7 +398,12 @@ func (b *Bucket) GetChunksCollection() *mongo.Collection {
 }
 
 func (b *Bucket) openDownloadStream(filter interface{}, opts ...*options.FindOptions) (*DownloadStream, error) {
-	ctx, cancel := deadlineContext(b.readDeadline)
+	deadline, err := b.getOperationDeadline(b.readDeadline)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := deadlineContext(deadline)
 	if cancel != nil {
 		defer cancel()
 	}
@@ -396,9 +434,15 @@ func (b *Bucket) openDownloadStream(filter interface{}, opts ...*options.FindOpt
 	if err != nil {
 		return nil, err
 	}
+
 	// The chunk size can be overridden for individual files, so the expected chunk size should be the "chunkSize"
 	// field from the files collection document, not the bucket's chunk size.
-	return newDownloadStream(chunksCursor, foundFile.ChunkSize, &foundFile), nil
+	stream := newDownloadStream(chunksCursor, foundFile.ChunkSize, &foundFile)
+	if err := stream.SetReadDeadline(deadline); err != nil {
+		_ = stream.Close()
+		return nil, err
+	}
+	return stream, nil
 }
 
 func deadlineContext(deadline time.Time) (context.Context, context.CancelFunc) {
@@ -407,6 +451,41 @@ func deadlineContext(deadline time.Time) (context.Context, context.CancelFunc) {
 	}
 
 	return context.WithDeadline(context.Background(), deadline)
+}
+
+func (b *Bucket) getOperationContext(bucketDeadline time.Time) (context.Context, context.CancelFunc, error) {
+	deadline, err := b.getOperationDeadline(bucketDeadline)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if deadline.Equal(time.Time{}) {
+		return context.Background(), nil, nil
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	return ctx, cancel, nil
+}
+
+func (b *Bucket) getOperationDeadline(bucketDeadline time.Time) (time.Time, error) {
+	// TODO: should users be allowed to override to empty time (i.e. no deadline) using SetDeadline(time.Time{})?
+	// TODO: we need to error if timeoutMS or bucketDeadline is used with a legacy timeout, but we can't get that
+	// information here.
+
+	globalTimeoutSet := b.timeout != nil
+	bucketDeadlineSet := !bucketDeadline.Equal(time.Time{})
+
+	// If there are no timeouts set, use context.Background().
+	if !globalTimeoutSet && !bucketDeadlineSet {
+		return time.Time{}, nil
+	}
+
+	// The bucket deadline should behave as an override for the global timeout.
+	if bucketDeadlineSet {
+		return bucketDeadline, nil
+	}
+
+	// Fallback to using the global timeout.
+	return time.Now().Add(*b.timeout), nil
 }
 
 func (b *Bucket) downloadToStream(ds *DownloadStream, stream io.Writer) (int64, error) {

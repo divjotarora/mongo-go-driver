@@ -755,7 +755,7 @@
       ]
     },
     {
-      "description": "DownloadByName fails after two NotMaster errors",
+      "description": "DownloadByName succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -774,8 +774,7 @@
           "object": "gridfsbucket",
           "arguments": {
             "filename": "abc"
-          },
-          "error": true
+          }
         }
       ],
       "expectations": [

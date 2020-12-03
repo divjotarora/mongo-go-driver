@@ -151,6 +151,7 @@ type operationError struct {
 	ErrorCodeName      *string  `bson:"errorCodeName"`
 	ErrorLabelsContain []string `bson:"errorLabelsContain"`
 	ErrorLabelsOmit    []string `bson:"errorLabelsOmit"`
+	IsTimeoutError     *bool    `bson:"isTimeoutError"`
 }
 
 const dataPath string = "../../data/"

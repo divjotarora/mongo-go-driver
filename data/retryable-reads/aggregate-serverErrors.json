@@ -1055,7 +1055,7 @@
       ]
     },
     {
-      "description": "Aggregate fails after two NotMaster errors",
+      "description": "Aggregate succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -1088,7 +1088,16 @@
               }
             ]
           },
-          "error": true
+          "result": [
+            {
+              "_id": 2,
+              "x": 22
+            },
+            {
+              "_id": 3,
+              "x": 33
+            }
+          ]
         }
       ],
       "expectations": [

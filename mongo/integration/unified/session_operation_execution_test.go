@@ -80,36 +80,47 @@ func executeStartTransaction(ctx context.Context, operation *Operation) (*Operat
 	return NewErrorResult(sess.StartTransaction(opts)), nil
 }
 
-func executeWithTransaction(ctx context.Context, operation *Operation) error {
+func executeWithTransaction(ctx context.Context, operation *Operation) (*OperationResult, error) {
 	sess, err := Entities(ctx).Session(operation.Object)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Process the "callback" argument. This is an array of Operation objects, each of which should be executed inside
 	// the transaction.
 	callback, err := operation.Arguments.LookupErr("callback")
 	if err != nil {
-		return newMissingArgumentError("callback")
+		return nil, newMissingArgumentError("callback")
 	}
 	var operations []*Operation
 	if err := callback.Unmarshal(&operations); err != nil {
-		return fmt.Errorf("error transforming callback option to slice of operations: %v", err)
+		return nil, fmt.Errorf("error transforming callback option to slice of operations: %v", err)
 	}
 
 	// Remove the "callback" field and process the other options.
 	var temp TransactionOptions
 	if err := bson.Unmarshal(RemoveFieldsFromDocument(operation.Arguments, "callback"), &temp); err != nil {
-		return fmt.Errorf("error unmarshalling arguments to TransactionOptions: %v", err)
+		return nil, fmt.Errorf("error unmarshalling arguments to TransactionOptions: %v", err)
 	}
 
-	_, err = sess.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
+	res, err := sess.WithTransaction(ctx, func(sessCtx mongo.SessionContext) (interface{}, error) {
 		for idx, op := range operations {
-			if err := op.Execute(ctx); err != nil {
+			if err := op.Execute(sessCtx); err != nil {
 				return nil, fmt.Errorf("error executing operation %q at index %d: %v", op.Name, idx, err)
 			}
 		}
 		return nil, nil
 	}, temp.TransactionOptions)
-	return err
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	if res == nil {
+		return NewEmptyResult(), nil
+	}
+	t, data, err := bson.MarshalValue(res)
+	if err != nil {
+		return nil, fmt.Errorf("error converting WithTransaction result to BSON: %v", err)
+	}
+	return NewValueResult(t, data, nil), nil
 }

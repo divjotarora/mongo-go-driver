@@ -38,6 +38,7 @@ type Collection struct {
 	readSelector   description.ServerSelector
 	writeSelector  description.ServerSelector
 	registry       *bsoncodec.Registry
+	timeout        *time.Duration
 }
 
 // aggregateParams is used to store information to configure an Aggregate operation.
@@ -55,6 +56,7 @@ type aggregateParams struct {
 	writeSelector  description.ServerSelector
 	readPreference *readpref.ReadPref
 	opts           []*options.AggregateOptions
+	timeout        *time.Duration
 }
 
 func closeImplicitSession(sess *session.Client) {
@@ -86,6 +88,11 @@ func newCollection(db *Database, name string, opts ...*options.CollectionOptions
 		reg = collOpt.Registry
 	}
 
+	timeout := db.timeout
+	if collOpt.Timeout != nil {
+		timeout = collOpt.Timeout
+	}
+
 	readSelector := description.CompositeSelector([]description.ServerSelector{
 		description.ReadPrefSelector(rp),
 		description.LatencySelector(db.client.localThreshold),
@@ -106,6 +113,7 @@ func newCollection(db *Database, name string, opts ...*options.CollectionOptions
 		readSelector:   readSelector,
 		writeSelector:  writeSelector,
 		registry:       reg,
+		timeout:        timeout,
 	}
 
 	return coll
@@ -122,6 +130,7 @@ func (coll *Collection) copy() *Collection {
 		readSelector:   coll.readSelector,
 		writeSelector:  coll.writeSelector,
 		registry:       coll.registry,
+		timeout:        coll.timeout,
 	}
 }
 
@@ -146,6 +155,10 @@ func (coll *Collection) Clone(opts ...*options.CollectionOptions) (*Collection, 
 
 	if optsColl.Registry != nil {
 		copyColl.registry = optsColl.Registry
+	}
+
+	if optsColl.Timeout != nil {
+		copyColl.timeout = optsColl.Timeout
 	}
 
 	copyColl.readSelector = description.CompositeSelector([]description.ServerSelector{
@@ -180,13 +193,16 @@ func (coll *Collection) BulkWrite(ctx context.Context, models []WriteModel,
 		return nil, ErrEmptySlice
 	}
 
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && coll.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(coll.client.sessionPool, coll.client.id, session.Implicit)
 		if err != nil {
 			return nil, err
@@ -194,7 +210,7 @@ func (coll *Collection) BulkWrite(ctx context.Context, models []WriteModel,
 		defer sess.EndSession()
 	}
 
-	err := coll.client.validSession(sess)
+	err = coll.client.validSession(sess)
 	if err != nil {
 		return nil, err
 	}
@@ -235,8 +251,12 @@ func (coll *Collection) BulkWrite(ctx context.Context, models []WriteModel,
 func (coll *Collection) insert(ctx context.Context, documents []interface{},
 	opts ...*options.InsertManyOptions) ([]interface{}, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	result := make([]interface{}, len(documents))
@@ -252,7 +272,6 @@ func (coll *Collection) insert(ctx context.Context, documents []interface{},
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && coll.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(coll.client.sessionPool, coll.client.id, session.Implicit)
 		if err != nil {
 			return nil, err
@@ -260,7 +279,7 @@ func (coll *Collection) insert(ctx context.Context, documents []interface{},
 		defer sess.EndSession()
 	}
 
-	err := coll.client.validSession(sess)
+	err = coll.client.validSession(sess)
 	if err != nil {
 		return nil, err
 	}
@@ -287,11 +306,7 @@ func (coll *Collection) insert(ctx context.Context, documents []interface{},
 	if imo.Ordered != nil {
 		op = op.Ordered(*imo.Ordered)
 	}
-	retry := driver.RetryNone
-	if coll.client.retryWrites {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(coll.client.retryWrites)
 
 	err = op.Execute(ctx)
 	wce, ok := err.(driver.WriteCommandError)
@@ -396,8 +411,12 @@ func (coll *Collection) InsertMany(ctx context.Context, documents []interface{},
 func (coll *Collection) delete(ctx context.Context, filter interface{}, deleteOne bool, expectedRr returnResult,
 	opts ...*options.DeleteOptions) (*DeleteResult, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	f, err := transformBsoncoreDocument(coll.registry, filter)
@@ -460,11 +479,7 @@ func (coll *Collection) delete(ctx context.Context, filter interface{}, deleteOn
 	}
 
 	// deleteMany cannot be retried
-	retryMode := driver.RetryNone
-	if deleteOne && coll.client.retryWrites {
-		retryMode = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retryMode)
+	op = op.Retry(deleteOne && coll.client.retryWrites)
 	rr, err := processWriteError(op.Execute(ctx))
 	if rr&expectedRr == 0 {
 		return nil, err
@@ -507,8 +522,12 @@ func (coll *Collection) DeleteMany(ctx context.Context, filter interface{},
 func (coll *Collection) updateOrReplace(ctx context.Context, filter bsoncore.Document, update interface{}, multi bool,
 	expectedRr returnResult, checkDollarKey bool, opts ...*options.UpdateOptions) (*UpdateResult, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	uo := options.MergeUpdateOptions(opts...)
@@ -556,12 +575,8 @@ func (coll *Collection) updateOrReplace(ctx context.Context, filter bsoncore.Doc
 	if uo.BypassDocumentValidation != nil && *uo.BypassDocumentValidation {
 		op = op.BypassDocumentValidation(*uo.BypassDocumentValidation)
 	}
-	retry := driver.RetryNone
 	// retryable writes are only enabled updateOne/replaceOne operations
-	if !multi && coll.client.retryWrites {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(!multi && coll.client.retryWrites)
 	err = op.Execute(ctx)
 
 	rr, err := processWriteError(err)
@@ -714,15 +729,20 @@ func (coll *Collection) Aggregate(ctx context.Context, pipeline interface{},
 		writeSelector:  coll.writeSelector,
 		readPreference: coll.readPreference,
 		opts:           opts,
+		timeout:        coll.timeout,
 	}
 	return aggregate(a)
 }
 
 // aggreate is the helper method for Aggregate
 func aggregate(a aggregateParams) (*Cursor, error) {
-
-	if a.ctx == nil {
-		a.ctx = context.Background()
+	ao := options.MergeAggregateOptions(a.opts...)
+	ctx, cancel, err := getOperationContext(a.ctx, a.client, a.timeout, ao.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	pipelineArr, hasOutputStage, err := transformAggregatePipelinev2(a.registry, a.pipeline)
@@ -730,7 +750,7 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 		return nil, err
 	}
 
-	sess := sessionFromContext(a.ctx)
+	sess := sessionFromContext(ctx)
 	if sess == nil && a.client.sessionPool != nil {
 		sess, err = session.NewClientSession(a.client.sessionPool, a.client.id, session.Implicit)
 		if err != nil {
@@ -760,7 +780,6 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 		selector = makeReadPrefSelector(sess, a.readSelector, a.client.localThreshold)
 	}
 
-	ao := options.MergeAggregateOptions(a.opts...)
 	cursorOpts := driver.CursorOptions{
 		CommandMonitor: a.client.monitor,
 		Crypt:          a.client.crypt,
@@ -816,13 +835,9 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 		op.Hint(hintVal)
 	}
 
-	retry := driver.RetryNone
-	if a.retryRead && !hasOutputStage {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(a.retryRead && !hasOutputStage)
 
-	err = op.Execute(a.ctx)
+	err = op.Execute(ctx)
 	if err != nil {
 		closeImplicitSession(sess)
 		if wce, ok := err.(driver.WriteCommandError); ok && wce.WriteConcernError != nil {
@@ -836,7 +851,7 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 		closeImplicitSession(sess)
 		return nil, replaceErrors(err)
 	}
-	cursor, err := newCursorWithSession(bc, a.registry, sess)
+	cursor, err := newCursorWithSession(bc, a.registry, sess, a.client, a.timeout)
 	return cursor, replaceErrors(err)
 }
 
@@ -851,11 +866,14 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 func (coll *Collection) CountDocuments(ctx context.Context, filter interface{},
 	opts ...*options.CountOptions) (int64, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
 	countOpts := options.MergeCountOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, countOpts.MaxTime, nil)
+	if err != nil {
+		return 0, err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
 
 	pipelineArr, err := countDocumentsAggregatePipeline(coll.registry, filter, countOpts)
 	if err != nil {
@@ -896,11 +914,7 @@ func (coll *Collection) CountDocuments(ctx context.Context, filter interface{},
 		}
 		op.Hint(hintVal)
 	}
-	retry := driver.RetryNone
-	if coll.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(coll.client.retryReads)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -935,13 +949,17 @@ func (coll *Collection) CountDocuments(ctx context.Context, filter interface{},
 func (coll *Collection) EstimatedDocumentCount(ctx context.Context,
 	opts ...*options.EstimatedDocumentCountOptions) (int64, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	co := options.MergeEstimatedDocumentCountOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, co.MaxTime, nil)
+	if err != nil {
+		return 0, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 
-	var err error
 	if sess == nil && coll.client.sessionPool != nil {
 		sess, err = session.NewClientSession(coll.client.sessionPool, coll.client.id, session.Implicit)
 		if err != nil {
@@ -966,15 +984,10 @@ func (coll *Collection) EstimatedDocumentCount(ctx context.Context,
 		Deployment(coll.client.deployment).ReadConcern(rc).ReadPreference(coll.readPreference).
 		ServerSelector(selector).Crypt(coll.client.crypt)
 
-	co := options.MergeEstimatedDocumentCountOptions(opts...)
 	if co.MaxTime != nil {
 		op = op.MaxTimeMS(int64(*co.MaxTime / time.Millisecond))
 	}
-	retry := driver.RetryNone
-	if coll.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op.Retry(retry)
+	op.Retry(coll.client.retryReads)
 
 	err = op.Execute(ctx)
 
@@ -994,8 +1007,13 @@ func (coll *Collection) EstimatedDocumentCount(ctx context.Context,
 func (coll *Collection) Distinct(ctx context.Context, fieldName string, filter interface{},
 	opts ...*options.DistinctOptions) ([]interface{}, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	option := options.MergeDistinctOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, option.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	f, err := transformBsoncoreDocument(coll.registry, filter)
@@ -1024,8 +1042,6 @@ func (coll *Collection) Distinct(ctx context.Context, fieldName string, filter i
 	}
 
 	selector := makeReadPrefSelector(sess, coll.readSelector, coll.client.localThreshold)
-	option := options.MergeDistinctOptions(opts...)
-
 	op := operation.NewDistinct(fieldName, bsoncore.Document(f)).
 		Session(sess).ClusterClock(coll.client.clock).
 		Database(coll.db.name).Collection(coll.name).CommandMonitor(coll.client.monitor).
@@ -1038,11 +1054,7 @@ func (coll *Collection) Distinct(ctx context.Context, fieldName string, filter i
 	if option.MaxTime != nil {
 		op.MaxTimeMS(int64(*option.MaxTime / time.Millisecond))
 	}
-	retry := driver.RetryNone
-	if coll.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(coll.client.retryReads)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -1083,8 +1095,17 @@ func (coll *Collection) Distinct(ctx context.Context, fieldName string, filter i
 func (coll *Collection) Find(ctx context.Context, filter interface{},
 	opts ...*options.FindOptions) (*Cursor, error) {
 
-	if ctx == nil {
-		ctx = context.Background()
+	fo := options.MergeFindOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, fo.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
+	if err := verifyMaxAwaitTimeMSUsage(ctx, fo.MaxAwaitTime); err != nil {
+		return nil, err
 	}
 
 	f, err := transformBsoncoreDocument(coll.registry, filter)
@@ -1119,7 +1140,6 @@ func (coll *Collection) Find(ctx context.Context, filter interface{},
 		ClusterClock(coll.client.clock).Database(coll.db.name).Collection(coll.name).
 		Deployment(coll.client.deployment).Crypt(coll.client.crypt)
 
-	fo := options.MergeFindOptions(opts...)
 	cursorOpts := driver.CursorOptions{
 		CommandMonitor: coll.client.monitor,
 		Crypt:          coll.client.crypt,
@@ -1223,11 +1243,7 @@ func (coll *Collection) Find(ctx context.Context, filter interface{},
 		}
 		op.Sort(sort)
 	}
-	retry := driver.RetryNone
-	if coll.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(coll.client.retryReads)
 
 	if err = op.Execute(ctx); err != nil {
 		closeImplicitSession(sess)
@@ -1239,7 +1255,25 @@ func (coll *Collection) Find(ctx context.Context, filter interface{},
 		closeImplicitSession(sess)
 		return nil, replaceErrors(err)
 	}
-	return newCursorWithSession(bc, coll.registry, sess)
+	return newCursorWithSession(bc, coll.registry, sess, coll.client, coll.timeout)
+}
+
+func verifyMaxAwaitTimeMSUsage(ctx context.Context, maxAwaitTime *time.Duration) error {
+	ctxDeadline, ctxHasDeadline := ctx.Deadline()
+	if !ctxHasDeadline || maxAwaitTime == nil {
+		// Both timeouts aren't used together.
+		return nil
+	}
+
+	// Error if maxAwaitTimeMS >= timeoutMS.
+	timeoutMS := ctxDeadline.Sub(time.Now()).Milliseconds()
+	maxAwaitTimeMS := maxAwaitTime.Milliseconds()
+
+	if maxAwaitTimeMS >= timeoutMS {
+		errmsg := "invalid MaxAwaitTime value %vms: the value must be less than the operation timeout %vms"
+		return fmt.Errorf(errmsg, maxAwaitTimeMS, timeoutMS)
+	}
+	return nil
 }
 
 // FindOne executes a find command and returns a SingleResult for one document in the collection.
@@ -1253,10 +1287,6 @@ func (coll *Collection) Find(ctx context.Context, filter interface{},
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/find/.
 func (coll *Collection) FindOne(ctx context.Context, filter interface{},
 	opts ...*options.FindOneOptions) *SingleResult {
-
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	findOpts := make([]*options.FindOptions, len(opts))
 	for i, opt := range opts {
@@ -1289,13 +1319,16 @@ func (coll *Collection) FindOne(ctx context.Context, filter interface{},
 	return &SingleResult{cur: cursor, reg: coll.registry, err: replaceErrors(err)}
 }
 
-func (coll *Collection) findAndModify(ctx context.Context, op *operation.FindAndModify) *SingleResult {
-	if ctx == nil {
-		ctx = context.Background()
+func (coll *Collection) findAndModify(ctx context.Context, op *operation.FindAndModify, maxTime *time.Duration) *SingleResult {
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, maxTime, nil)
+	if err != nil {
+		return &SingleResult{err: err}
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
-	var err error
 	if sess == nil && coll.client.sessionPool != nil {
 		sess, err = session.NewClientSession(coll.client.sessionPool, coll.client.id, session.Implicit)
 		if err != nil {
@@ -1319,11 +1352,6 @@ func (coll *Collection) findAndModify(ctx context.Context, op *operation.FindAnd
 
 	selector := makePinnedSelector(sess, coll.writeSelector)
 
-	retry := driver.RetryNone
-	if coll.client.retryWrites {
-		retry = driver.RetryOnce
-	}
-
 	op = op.Session(sess).
 		WriteConcern(wc).
 		CommandMonitor(coll.client.monitor).
@@ -1332,7 +1360,7 @@ func (coll *Collection) findAndModify(ctx context.Context, op *operation.FindAnd
 		Database(coll.db.name).
 		Collection(coll.name).
 		Deployment(coll.client.deployment).
-		Retry(retry).
+		Retry(coll.client.retryWrites).
 		Crypt(coll.client.crypt)
 
 	_, err = processWriteError(op.Execute(ctx))
@@ -1391,7 +1419,7 @@ func (coll *Collection) FindOneAndDelete(ctx context.Context, filter interface{}
 		op = op.Hint(hint)
 	}
 
-	return coll.findAndModify(ctx, op)
+	return coll.findAndModify(ctx, op, fod.MaxTime)
 }
 
 // FindOneAndReplace executes a findAndModify command to replace at most one document in the collection
@@ -1462,7 +1490,7 @@ func (coll *Collection) FindOneAndReplace(ctx context.Context, filter interface{
 		op = op.Hint(hint)
 	}
 
-	return coll.findAndModify(ctx, op)
+	return coll.findAndModify(ctx, op, fo.MaxTime)
 }
 
 // FindOneAndUpdate executes a findAndModify command to update at most one document in the collection and returns the
@@ -1545,7 +1573,7 @@ func (coll *Collection) FindOneAndUpdate(ctx context.Context, filter interface{}
 		op = op.Hint(hint)
 	}
 
-	return coll.findAndModify(ctx, op)
+	return coll.findAndModify(ctx, op, fo.MaxTime)
 }
 
 // Watch returns a change stream for all changes on the corresponding collection. See
@@ -1573,6 +1601,7 @@ func (coll *Collection) Watch(ctx context.Context, pipeline interface{},
 		collectionName: coll.Name(),
 		databaseName:   coll.db.Name(),
 		crypt:          coll.client.crypt,
+		timeout:        coll.timeout,
 	}
 	return newChangeStream(ctx, csConfig, pipeline, opts...)
 }
@@ -1585,13 +1614,16 @@ func (coll *Collection) Indexes() IndexView {
 // Drop drops the collection on the server. This method ignores "namespace not found" errors so it is safe to drop
 // a collection that does not exist on the server.
 func (coll *Collection) Drop(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, coll.client, coll.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && coll.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(coll.client.sessionPool, coll.client.id, session.Implicit)
 		if err != nil {
 			return err
@@ -1599,7 +1631,7 @@ func (coll *Collection) Drop(ctx context.Context) error {
 		defer sess.EndSession()
 	}
 
-	err := coll.client.validSession(sess)
+	err = coll.client.validSession(sess)
 	if err != nil {
 		return err
 	}

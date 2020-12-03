@@ -30,7 +30,7 @@ type ListIndexes struct {
 	database   string
 	deployment driver.Deployment
 	selector   description.ServerSelector
-	retry      *driver.RetryMode
+	retry      bool
 	crypt      *driver.Crypt
 
 	result driver.CursorResponse
@@ -65,6 +65,7 @@ func (li *ListIndexes) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "listIndexes",
 		CommandFn:         li.command,
 		ProcessResponseFn: li.processResponse,
 
@@ -76,7 +77,7 @@ func (li *ListIndexes) Execute(ctx context.Context) error {
 		Selector:       li.selector,
 		Crypt:          li.crypt,
 		Legacy:         driver.LegacyListIndexes,
-		RetryMode:      li.retry,
+		Retry:          li.retry,
 		Type:           driver.Read,
 	}.Execute(ctx, nil)
 
@@ -192,12 +193,12 @@ func (li *ListIndexes) ServerSelector(selector description.ServerSelector) *List
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (li *ListIndexes) Retry(retry driver.RetryMode) *ListIndexes {
+func (li *ListIndexes) Retry(retry bool) *ListIndexes {
 	if li == nil {
 		li = new(ListIndexes)
 	}
 
-	li.retry = &retry
+	li.retry = retry
 	return li
 }
 

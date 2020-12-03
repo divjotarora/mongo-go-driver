@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
@@ -39,6 +40,7 @@ type Database struct {
 	readSelector   description.ServerSelector
 	writeSelector  description.ServerSelector
 	registry       *bsoncodec.Registry
+	timeout        *time.Duration
 }
 
 func newDatabase(client *Client, name string, opts ...*options.DatabaseOptions) *Database {
@@ -64,6 +66,11 @@ func newDatabase(client *Client, name string, opts ...*options.DatabaseOptions) 
 		reg = dbOpt.Registry
 	}
 
+	timeout := client.timeout
+	if dbOpt.Timeout != nil {
+		timeout = dbOpt.Timeout
+	}
+
 	db := &Database{
 		client:         client,
 		name:           name,
@@ -71,6 +78,7 @@ func newDatabase(client *Client, name string, opts ...*options.DatabaseOptions) 
 		readConcern:    rc,
 		writeConcern:   wc,
 		registry:       reg,
+		timeout:        timeout,
 	}
 
 	db.readSelector = description.CompositeSelector([]description.ServerSelector{
@@ -115,6 +123,7 @@ func (db *Database) Collection(name string, opts ...*options.CollectionOptions) 
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/aggregate/.
 func (db *Database) Aggregate(ctx context.Context, pipeline interface{},
 	opts ...*options.AggregateOptions) (*Cursor, error) {
+
 	a := aggregateParams{
 		ctx:            ctx,
 		pipeline:       pipeline,
@@ -128,12 +137,14 @@ func (db *Database) Aggregate(ctx context.Context, pipeline interface{},
 		writeSelector:  db.writeSelector,
 		readPreference: db.readPreference,
 		opts:           opts,
+		timeout:        db.timeout,
 	}
 	return aggregate(a)
 }
 
 func (db *Database) processRunCommand(ctx context.Context, cmd interface{},
 	opts ...*options.RunCmdOptions) (*operation.Command, *session.Client, error) {
+
 	sess := sessionFromContext(ctx)
 	if sess == nil && db.client.sessionPool != nil {
 		var err error
@@ -181,8 +192,12 @@ func (db *Database) processRunCommand(ctx context.Context, cmd interface{},
 //
 // The opts parameter can be used to specify options for this operation (see the options.RunCmdOptions documentation).
 func (db *Database) RunCommand(ctx context.Context, runCommand interface{}, opts ...*options.RunCmdOptions) *SingleResult {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, db.client, db.timeout, nil, nil)
+	if err != nil {
+		return &SingleResult{err: err}
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	op, sess, err := db.processRunCommand(ctx, runCommand, opts...)
@@ -212,8 +227,12 @@ func (db *Database) RunCommand(ctx context.Context, runCommand interface{}, opts
 //
 // The opts parameter can be used to specify options for this operation (see the options.RunCmdOptions documentation).
 func (db *Database) RunCommandCursor(ctx context.Context, runCommand interface{}, opts ...*options.RunCmdOptions) (*Cursor, error) {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, db.client, db.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	op, sess, err := db.processRunCommand(ctx, runCommand, opts...)
@@ -232,20 +251,23 @@ func (db *Database) RunCommandCursor(ctx context.Context, runCommand interface{}
 		closeImplicitSession(sess)
 		return nil, replaceErrors(err)
 	}
-	cursor, err := newCursorWithSession(bc, db.registry, sess)
+	cursor, err := newCursorWithSession(bc, db.registry, sess, db.client, db.timeout)
 	return cursor, replaceErrors(err)
 }
 
 // Drop drops the database on the server. This method ignores "namespace not found" errors so it is safe to drop
 // a database that does not exist on the server.
 func (db *Database) Drop(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, db.client, db.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && db.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(db.client.sessionPool, db.client.id, session.Implicit)
 		if err != nil {
 			return err
@@ -253,7 +275,7 @@ func (db *Database) Drop(ctx context.Context) error {
 		defer sess.EndSession()
 	}
 
-	err := db.client.validSession(sess)
+	err = db.client.validSession(sess)
 	if err != nil {
 		return err
 	}
@@ -328,8 +350,12 @@ func (db *Database) ListCollectionSpecifications(ctx context.Context, filter int
 //
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/listCollections/.
 func (db *Database) ListCollections(ctx context.Context, filter interface{}, opts ...*options.ListCollectionsOptions) (*Cursor, error) {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, db.client, db.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	filterDoc, err := transformBsoncoreDocument(db.registry, filter)
@@ -369,11 +395,7 @@ func (db *Database) ListCollections(ctx context.Context, filter interface{}, opt
 		op = op.BatchSize(*lco.BatchSize)
 	}
 
-	retry := driver.RetryNone
-	if db.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op = op.Retry(retry)
+	op = op.Retry(db.client.retryReads)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -386,7 +408,7 @@ func (db *Database) ListCollections(ctx context.Context, filter interface{}, opt
 		closeImplicitSession(sess)
 		return nil, replaceErrors(err)
 	}
-	cursor, err := newCursorWithSession(bc, db.registry, sess)
+	cursor, err := newCursorWithSession(bc, db.registry, sess, db.client, db.timeout)
 	return cursor, replaceErrors(err)
 }
 
@@ -451,6 +473,11 @@ func (db *Database) WriteConcern() *writeconcern.WriteConcern {
 	return db.writeConcern
 }
 
+// Timeout returns the timeout value used to configure the Database object or nil if there is no timeout.
+func (db *Database) Timeout() *time.Duration {
+	return db.timeout
+}
+
 // Watch returns a change stream for all changes to the corresponding database. See
 // https://docs.mongodb.com/manual/changeStreams/ for more information about change streams.
 //
@@ -475,6 +502,7 @@ func (db *Database) Watch(ctx context.Context, pipeline interface{},
 		streamType:     DatabaseStream,
 		databaseName:   db.Name(),
 		crypt:          db.client.crypt,
+		timeout:        db.timeout,
 	}
 	return newChangeStream(ctx, csConfig, pipeline, opts...)
 }
@@ -575,9 +603,16 @@ func (db *Database) CreateView(ctx context.Context, viewName, viewOn string, pip
 }
 
 func (db *Database) executeCreateOperation(ctx context.Context, op *operation.Create) error {
+	ctx, cancel, err := getOperationContext(ctx, db.client, db.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
 	sess := sessionFromContext(ctx)
 	if sess == nil && db.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(db.client.sessionPool, db.client.id, session.Implicit)
 		if err != nil {
 			return err
@@ -585,7 +620,7 @@ func (db *Database) executeCreateOperation(ctx context.Context, op *operation.Cr
 		defer sess.EndSession()
 	}
 
-	err := db.client.validSession(sess)
+	err = db.client.validSession(sess)
 	if err != nil {
 		return err
 	}

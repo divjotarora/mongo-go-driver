@@ -1,0 +1,338 @@
+{
+  "description": "timeoutMS behaves correctly when closing cursors",
+  "schemaVersion": "1.2",
+  "runOnRequirements": [
+    {
+      "minServerVersion": "4.4"
+    }
+  ],
+  "createEntities": [
+    {
+      "client": {
+        "id": "failPointClient",
+        "useMultipleMongoses": false
+      }
+    },
+    {
+      "client": {
+        "id": "client",
+        "uriOptions": {
+          "connectTimeoutMS": 20
+        },
+        "useMultipleMongoses": false,
+        "observeEvents": [
+          "commandStartedEvent",
+          "commandFailedEvent"
+        ]
+      }
+    },
+    {
+      "database": {
+        "id": "database",
+        "client": "client",
+        "databaseName": "test"
+      }
+    }
+  ],
+  "initialData": [
+    {
+      "collectionName": "coll",
+      "databaseName": "test",
+      "documents": [
+        {
+          "_id": 0
+        },
+        {
+          "_id": 1
+        }
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "description": "min of connectTimeoutMS and timeoutMS used as timeoutMS when closing a cursor - connectTimeoutMS is lower",
+      "operations": [
+        {
+          "name": "createEntities",
+          "object": "testRunner",
+          "arguments": {
+            "entities": [
+              {
+                "collection": {
+                  "id": "collection",
+                  "database": "database",
+                  "collectionName": "coll",
+                  "collectionOptions": {
+                    "timeoutMS": 30
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "failPoint",
+          "object": "testRunner",
+          "arguments": {
+            "client": "failPointClient",
+            "failPoint": {
+              "configureFailPoint": "failCommand",
+              "mode": {
+                "times": 1
+              },
+              "data": {
+                "failCommands": [
+                  "killCursors"
+                ],
+                "blockConnection": true,
+                "blockTimeMS": 25
+              }
+            }
+          }
+        },
+        {
+          "name": "createFindCursor",
+          "object": "collection",
+          "arguments": {
+            "filter": {},
+            "batchSize": 1
+          },
+          "saveResultAsEntity": "cursor"
+        },
+        {
+          "name": "close",
+          "object": "cursor"
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "find",
+                "databaseName": "test",
+                "command": {
+                  "find": "coll"
+                }
+              }
+            },
+            {
+              "commandStartedEvent": {
+                "commandName": "killCursors",
+                "databaseName": "test",
+                "command": {
+                  "killCursors": "coll",
+                  "cursors": {
+                    "$$type": "array"
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "commandFailedEvent": {
+                "commandName": "killCursors"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "min of connectTimeoutMS and timeoutMS used as timeoutMS when closing a cursor - timeoutMS is lower",
+      "operations": [
+        {
+          "name": "createEntities",
+          "object": "testRunner",
+          "arguments": {
+            "entities": [
+              {
+                "collection": {
+                  "id": "collection",
+                  "database": "database",
+                  "collectionName": "coll",
+                  "collectionOptions": {
+                    "timeoutMS": 10
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "failPoint",
+          "object": "testRunner",
+          "arguments": {
+            "client": "failPointClient",
+            "failPoint": {
+              "configureFailPoint": "failCommand",
+              "mode": {
+                "times": 1
+              },
+              "data": {
+                "failCommands": [
+                  "killCursors"
+                ],
+                "blockConnection": true,
+                "blockTimeMS": 15
+              }
+            }
+          }
+        },
+        {
+          "name": "createFindCursor",
+          "object": "collection",
+          "arguments": {
+            "filter": {},
+            "batchSize": 1
+          },
+          "saveResultAsEntity": "cursor"
+        },
+        {
+          "name": "close",
+          "object": "cursor"
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "find",
+                "databaseName": "test",
+                "command": {
+                  "find": "coll"
+                }
+              }
+            },
+            {
+              "commandStartedEvent": {
+                "commandName": "killCursors",
+                "databaseName": "test",
+                "command": {
+                  "killCursors": "coll",
+                  "cursors": {
+                    "$$type": "array"
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "commandFailedEvent": {
+                "commandName": "killCursors"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "min of connectTimeoutMS and timeoutMS used as timeoutMS when closing a cursor - timeoutMS is 0",
+      "operations": [
+        {
+          "name": "createEntities",
+          "object": "testRunner",
+          "arguments": {
+            "entities": [
+              {
+                "collection": {
+                  "id": "collection",
+                  "database": "database",
+                  "collectionName": "coll",
+                  "collectionOptions": {
+                    "timeoutMS": 0
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "failPoint",
+          "object": "testRunner",
+          "arguments": {
+            "client": "failPointClient",
+            "failPoint": {
+              "configureFailPoint": "failCommand",
+              "mode": {
+                "times": 1
+              },
+              "data": {
+                "failCommands": [
+                  "killCursors"
+                ],
+                "blockConnection": true,
+                "blockTimeMS": 25
+              }
+            }
+          }
+        },
+        {
+          "name": "createFindCursor",
+          "object": "collection",
+          "arguments": {
+            "filter": {},
+            "batchSize": 1
+          },
+          "saveResultAsEntity": "cursor"
+        },
+        {
+          "name": "close",
+          "object": "cursor"
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "find",
+                "databaseName": "test",
+                "command": {
+                  "find": "coll"
+                }
+              }
+            },
+            {
+              "commandStartedEvent": {
+                "commandName": "killCursors",
+                "databaseName": "test",
+                "command": {
+                  "killCursors": "coll",
+                  "cursors": {
+                    "$$type": "array"
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "commandFailedEvent": {
+                "commandName": "killCursors"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -35,7 +35,7 @@ type Insert struct {
 	deployment               driver.Deployment
 	selector                 description.ServerSelector
 	writeConcern             *writeconcern.WriteConcern
-	retry                    *driver.RetryMode
+	retry                    bool
 	result                   InsertResult
 }
 
@@ -91,10 +91,11 @@ func (i *Insert) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "insert",
 		CommandFn:         i.command,
 		ProcessResponseFn: i.processResponse,
 		Batches:           batches,
-		RetryMode:         i.retry,
+		Retry:             i.retry,
 		Type:              driver.Write,
 		Client:            i.session,
 		Clock:             i.clock,
@@ -244,11 +245,11 @@ func (i *Insert) WriteConcern(writeConcern *writeconcern.WriteConcern) *Insert {
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (i *Insert) Retry(retry driver.RetryMode) *Insert {
+func (i *Insert) Retry(retry bool) *Insert {
 	if i == nil {
 		i = new(Insert)
 	}
 
-	i.retry = &retry
+	i.retry = retry
 	return i
 }

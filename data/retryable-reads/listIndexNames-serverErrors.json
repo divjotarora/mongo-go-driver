@@ -448,7 +448,7 @@
       ]
     },
     {
-      "description": "ListIndexNames fails after two NotMaster errors",
+      "description": "ListIndexNames succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -464,8 +464,7 @@
       "operations": [
         {
           "name": "listIndexNames",
-          "object": "collection",
-          "error": true
+          "object": "collection"
         }
       ],
       "expectations": [

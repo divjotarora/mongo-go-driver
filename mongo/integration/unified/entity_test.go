@@ -52,10 +52,10 @@ type EntityOptions struct {
 // references another (e.g. a database entity references a client) will fail if the referenced entity does not exist.
 type EntityMap struct {
 	allEntities   map[string]struct{}
-	changeStreams map[string]*mongo.ChangeStream
+	iterators     map[string]*IteratorEntity
 	clients       map[string]*ClientEntity
-	dbs           map[string]*mongo.Database
-	collections   map[string]*mongo.Collection
+	dbs           map[string]*DatabaseEntity
+	collections   map[string]*CollectionEntity
 	sessions      map[string]mongo.Session
 	gridfsBuckets map[string]*gridfs.Bucket
 	bsonValues    map[string]bson.RawValue
@@ -66,10 +66,10 @@ func NewEntityMap() *EntityMap {
 		allEntities:   make(map[string]struct{}),
 		gridfsBuckets: make(map[string]*gridfs.Bucket),
 		bsonValues:    make(map[string]bson.RawValue),
-		changeStreams: make(map[string]*mongo.ChangeStream),
 		clients:       make(map[string]*ClientEntity),
-		collections:   make(map[string]*mongo.Collection),
-		dbs:           make(map[string]*mongo.Database),
+		collections:   make(map[string]*CollectionEntity),
+		iterators:     make(map[string]*IteratorEntity),
+		dbs:           make(map[string]*DatabaseEntity),
 		sessions:      make(map[string]mongo.Session),
 	}
 }
@@ -84,13 +84,13 @@ func (em *EntityMap) AddBSONEntity(id string, val bson.RawValue) error {
 	return nil
 }
 
-func (em *EntityMap) AddChangeStreamEntity(id string, stream *mongo.ChangeStream) error {
+func (em *EntityMap) AddIteratorEntity(id string, iter *IteratorEntity) error {
 	if err := em.verifyEntityDoesNotExist(id); err != nil {
 		return err
 	}
 
 	em.allEntities[id] = struct{}{}
-	em.changeStreams[id] = stream
+	em.iterators[id] = iter
 	return nil
 }
 
@@ -122,6 +122,26 @@ func (em *EntityMap) AddEntity(ctx context.Context, entityType string, entityOpt
 	return nil
 }
 
+func (em *EntityMap) OverwriteDatabaseEntity(id string, db *DatabaseEntity) error {
+	_, ok := em.dbs[id]
+	if !ok {
+		return newEntityNotFoundError("database", id)
+	}
+
+	em.dbs[id] = db
+	return nil
+}
+
+func (em *EntityMap) OverwriteCollectionEntity(id string, coll *CollectionEntity) error {
+	_, ok := em.collections[id]
+	if !ok {
+		return newEntityNotFoundError("collection", id)
+	}
+
+	em.collections[id] = coll
+	return nil
+}
+
 func (em *EntityMap) GridFSBucket(id string) (*gridfs.Bucket, error) {
 	bucket, ok := em.gridfsBuckets[id]
 	if !ok {
@@ -138,14 +158,6 @@ func (em *EntityMap) BSONValue(id string) (bson.RawValue, error) {
 	return val, nil
 }
 
-func (em *EntityMap) ChangeStream(id string) (*mongo.ChangeStream, error) {
-	client, ok := em.changeStreams[id]
-	if !ok {
-		return nil, newEntityNotFoundError("change stream", id)
-	}
-	return client, nil
-}
-
 func (em *EntityMap) Client(id string) (*ClientEntity, error) {
 	client, ok := em.clients[id]
 	if !ok {
@@ -158,11 +170,11 @@ func (em *EntityMap) Clients() map[string]*ClientEntity {
 	return em.clients
 }
 
-func (em *EntityMap) Collections() map[string]*mongo.Collection {
+func (em *EntityMap) Collections() map[string]*CollectionEntity {
 	return em.collections
 }
 
-func (em *EntityMap) Collection(id string) (*mongo.Collection, error) {
+func (em *EntityMap) Collection(id string) (*CollectionEntity, error) {
 	coll, ok := em.collections[id]
 	if !ok {
 		return nil, newEntityNotFoundError("collection", id)
@@ -170,7 +182,15 @@ func (em *EntityMap) Collection(id string) (*mongo.Collection, error) {
 	return coll, nil
 }
 
-func (em *EntityMap) Database(id string) (*mongo.Database, error) {
+func (em *EntityMap) Iterator(id string) (*IteratorEntity, error) {
+	iter, ok := em.iterators[id]
+	if !ok {
+		return nil, newEntityNotFoundError("iterator", id)
+	}
+	return iter, nil
+}
+
+func (em *EntityMap) Database(id string) (*DatabaseEntity, error) {
 	db, ok := em.dbs[id]
 	if !ok {
 		return nil, newEntityNotFoundError("database", id)
@@ -218,12 +238,12 @@ func (em *EntityMap) addDatabaseEntity(EntityOptions *EntityOptions) error {
 		return newEntityNotFoundError("client", EntityOptions.ClientID)
 	}
 
-	dbOpts := options.Database()
+	var dbOpts *options.DatabaseOptions
 	if EntityOptions.DatabaseOptions != nil {
 		dbOpts = EntityOptions.DatabaseOptions.DBOptions
 	}
 
-	em.dbs[EntityOptions.ID] = client.Database(EntityOptions.DatabaseName, dbOpts)
+	em.dbs[EntityOptions.ID] = NewDatabaseEntity(client, EntityOptions.DatabaseName, dbOpts)
 	return nil
 }
 
@@ -238,7 +258,7 @@ func (em *EntityMap) addCollectionEntity(EntityOptions *EntityOptions) error {
 		collOpts = EntityOptions.CollectionOptions.CollectionOptions
 	}
 
-	em.collections[EntityOptions.ID] = db.Collection(EntityOptions.CollectionName, collOpts)
+	em.collections[EntityOptions.ID] = NewCollectionEntity(db, EntityOptions.CollectionName, collOpts)
 	return nil
 }
 
@@ -273,7 +293,7 @@ func (em *EntityMap) addGridFSBucketEntity(EntityOptions *EntityOptions) error {
 		bucketOpts = EntityOptions.GridFSBucketOptions.BucketOptions
 	}
 
-	bucket, err := gridfs.NewBucket(db, bucketOpts)
+	bucket, err := gridfs.NewBucket(db.Database, bucketOpts)
 	if err != nil {
 		return fmt.Errorf("error creating GridFS bucket: %v", err)
 	}

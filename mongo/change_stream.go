@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"reflect"
 	"strconv"
 	"time"
@@ -83,6 +84,7 @@ type ChangeStream struct {
 	selector      description.ServerSelector
 	operationTime *primitive.Timestamp
 	wireVersion   *description.VersionRange
+	timeout       *time.Duration
 }
 
 type changeStreamConfig struct {
@@ -94,12 +96,18 @@ type changeStreamConfig struct {
 	collectionName string
 	databaseName   string
 	crypt          *driver.Crypt
+	timeout        *time.Duration
 }
 
 func newChangeStream(ctx context.Context, config changeStreamConfig, pipeline interface{},
 	opts ...*options.ChangeStreamOptions) (*ChangeStream, error) {
-	if ctx == nil {
-		ctx = context.Background()
+
+	ctx, cancel, err := getOperationContext(ctx, config.client, config.timeout, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	cs := &ChangeStream{
@@ -108,6 +116,10 @@ func newChangeStream(ctx context.Context, config changeStreamConfig, pipeline in
 		streamType: config.streamType,
 		options:    options.MergeChangeStreamOptions(opts...),
 		selector:   description.ReadPrefSelector(config.readPreference),
+		timeout:    config.timeout,
+	}
+	if err := verifyMaxAwaitTimeMSUsage(ctx, cs.options.MaxAwaitTime); err != nil {
+		return nil, err
 	}
 
 	cs.sess = sessionFromContext(ctx)
@@ -125,7 +137,7 @@ func newChangeStream(ctx context.Context, config changeStreamConfig, pipeline in
 	cs.aggregate = operation.NewAggregate(nil).
 		ReadPreference(config.readPreference).ReadConcern(config.readConcern).
 		Deployment(cs.client.deployment).ClusterClock(cs.client.clock).
-		CommandMonitor(cs.client.monitor).Session(cs.sess).ServerSelector(cs.selector).Retry(driver.RetryNone).
+		CommandMonitor(cs.client.monitor).Session(cs.sess).ServerSelector(cs.selector).
 		Crypt(config.crypt)
 
 	if config.crypt != nil {
@@ -208,8 +220,6 @@ func (cs *ChangeStream) executeOperation(ctx context.Context, resuming bool) err
 	defer conn.Close()
 	cs.wireVersion = conn.Description().WireVersion
 
-	cs.aggregate.Deployment(cs.createOperationDeployment(server, conn))
-
 	if resuming {
 		cs.replaceOptions(ctx, cs.wireVersion)
 
@@ -228,49 +238,60 @@ func (cs *ChangeStream) executeOperation(ctx context.Context, resuming bool) err
 		cs.aggregate.Pipeline(plArr)
 	}
 
-	if original := cs.aggregate.Execute(ctx); original != nil {
+	var socketTimeoutCount int
+	_, ctxHasDeadline := ctx.Deadline()
+	for {
+		cs.aggregate.Deployment(cs.createOperationDeployment(server, conn))
+		original := cs.aggregate.Execute(ctx)
+		cs.err = replaceErrors(original)
+		if original == nil {
+			break
+		}
+
 		retryableRead := cs.client.retryReads && cs.wireVersion != nil && cs.wireVersion.Max >= 6
 		if !retryableRead {
-			cs.err = replaceErrors(original)
 			return cs.err
 		}
 
-		cs.err = original
 		switch tt := original.(type) {
 		case driver.Error:
-			if !tt.RetryableRead() {
-				break
+			// TODO remove use of errors.As
+			var netErr net.Error
+			if !ctxHasDeadline && errors.As(tt, &netErr) && netErr.Timeout() {
+				socketTimeoutCount++
 			}
 
+			// Socket timeouts caused by using the legacy socketTimeoutMS option can only be retried once. After the
+			// second, the error is no longer considered retryable.
+			if socketTimeoutCount >= 2 || !tt.RetryableRead() {
+				return cs.err
+			}
+
+			// Any errors when re-selecting a server or getting a new connection should stop the retry attempt. These
+			// errors should be swallowed and the original error should be propagated.
 			server, err = cs.client.deployment.SelectServer(ctx, cs.selector)
 			if err != nil {
-				break
+				return cs.err
 			}
 
-			conn.Close()
+			conn.Close() // Avoid leaking previous connection.
 			conn, err = server.Connection(ctx)
 			if err != nil {
-				break
+				return cs.err
 			}
-			defer conn.Close()
+			defer conn.Close() // Avoid leaking the new connection.
+
 			cs.wireVersion = conn.Description().WireVersion
-
 			if cs.wireVersion == nil || cs.wireVersion.Max < 6 {
-				break
+				return cs.err
 			}
-
-			cs.aggregate.Deployment(cs.createOperationDeployment(server, conn))
-			cs.err = cs.aggregate.Execute(ctx)
+		default:
+			// All errors besides driver.Error are not retryable.
+			return cs.err
 		}
-
-		if cs.err != nil {
-			cs.err = replaceErrors(cs.err)
-			return cs.Err()
-		}
-
 	}
-	cs.err = nil
 
+	cs.err = nil
 	cr := cs.aggregate.ResultCursorResponse()
 	cr.Server = server
 
@@ -469,8 +490,12 @@ func (cs *ChangeStream) Err() error {
 // Close closes this change stream and the underlying cursor. Next and TryNext must not be called after Close has been
 // called. Close is idempotent. After the first call, any subsequent calls will not change the state.
 func (cs *ChangeStream) Close(ctx context.Context) error {
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, cs.client, cs.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	defer closeImplicitSession(cs.sess)
@@ -517,13 +542,22 @@ func (cs *ChangeStream) TryNext(ctx context.Context) bool {
 }
 
 func (cs *ChangeStream) next(ctx context.Context, nonBlocking bool) bool {
+	ctx, cancel, err := getOperationContext(ctx, cs.client, cs.timeout, nil, nil)
+	if err != nil {
+		cs.err = err
+		return false
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
+	if errors.Is(cs.Err(), context.DeadlineExceeded) {
+		cs.err = cs.executeOperation(ctx, true)
+	}
+
 	// return false right away if the change stream has already errored or if cursor is closed.
 	if cs.err != nil {
 		return false
-	}
-
-	if ctx == nil {
-		ctx = context.Background()
 	}
 
 	if len(cs.batch) == 0 {

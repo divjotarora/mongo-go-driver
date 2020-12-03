@@ -8,6 +8,7 @@ package unified
 
 import (
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
@@ -156,4 +157,66 @@ func createHint(val bson.RawValue) (interface{}, error) {
 		return nil, fmt.Errorf("unrecognized hint value type %s", val.Type)
 	}
 	return hint, nil
+}
+
+type listDatabasesArguments struct {
+	filter bson.Raw
+	opts   *options.ListDatabasesOptions
+}
+
+func createListDatabasesArguments(args bson.Raw) (*listDatabasesArguments, error) {
+	lda := &listDatabasesArguments{
+		// We set a default filter rather than erroring if the Arguments doc doesn't have a "filter" field because the
+		// spec says drivers should support this field, not must.
+		filter: emptyDocument,
+		opts:   options.ListDatabases(),
+	}
+
+	elems, _ := args.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "authorizedDatabases":
+			lda.opts.SetAuthorizedDatabases(val.Boolean())
+		case "filter":
+			lda.filter = val.Document()
+		case "nameOnly":
+			lda.opts.SetNameOnly(val.Boolean())
+		default:
+			return nil, fmt.Errorf("unrecognized listDatabases option %q", key)
+		}
+	}
+	return lda, nil
+}
+
+type dropIndexesArguments struct {
+	name string
+	opts *options.DropIndexesOptions
+}
+
+func createDropIndexesArguments(args bson.Raw, nameRequired bool) (*dropIndexesArguments, error) {
+	dia := &dropIndexesArguments{
+		opts: options.DropIndexes(),
+	}
+
+	elems, _ := args.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "maxTimeMS":
+			dia.opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+		case "name":
+			dia.name = val.StringValue()
+		default:
+			return nil, fmt.Errorf("unrecognized dropIndexes option %q", key)
+		}
+	}
+	if nameRequired && dia.name == "" {
+		return nil, newMissingArgumentError("name")
+	}
+	return dia, nil
 }

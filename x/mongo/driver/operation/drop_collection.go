@@ -88,6 +88,7 @@ func (dc *DropCollection) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "drop",
 		CommandFn:         dc.command,
 		ProcessResponseFn: dc.processResponse,
 		Client:            dc.session,

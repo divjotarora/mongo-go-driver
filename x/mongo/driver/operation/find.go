@@ -56,7 +56,7 @@ type Find struct {
 	readConcern         *readconcern.ReadConcern
 	readPreference      *readpref.ReadPref
 	selector            description.ServerSelector
-	retry               *driver.RetryMode
+	retry               bool
 	result              driver.CursorResponse
 }
 
@@ -85,9 +85,10 @@ func (f *Find) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "find",
 		CommandFn:         f.command,
 		ProcessResponseFn: f.processResponse,
-		RetryMode:         f.retry,
+		Retry:             f.retry,
 		Type:              driver.Read,
 		Client:            f.session,
 		Clock:             f.clock,
@@ -100,7 +101,6 @@ func (f *Find) Execute(ctx context.Context) error {
 		Selector:          f.selector,
 		Legacy:            driver.LegacyFind,
 	}.Execute(ctx, nil)
-
 }
 
 func (f *Find) command(dst []byte, desc description.SelectedServer) ([]byte, error) {
@@ -502,11 +502,11 @@ func (f *Find) ServerSelector(selector description.ServerSelector) *Find {
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (f *Find) Retry(retry driver.RetryMode) *Find {
+func (f *Find) Retry(retry bool) *Find {
 	if f == nil {
 		f = new(Find)
 	}
 
-	f.retry = &retry
+	f.retry = retry
 	return f
 }

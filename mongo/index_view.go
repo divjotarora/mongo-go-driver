@@ -67,20 +67,24 @@ func isNamespaceNotFoundError(err error) bool {
 //
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/listIndexes/.
 func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOptions) (*Cursor, error) {
-	if ctx == nil {
-		ctx = context.Background()
+	lio := options.MergeListIndexesOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, iv.coll.client, iv.coll.timeout, lio.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && iv.coll.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(iv.coll.client.sessionPool, iv.coll.client.id, session.Implicit)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err := iv.coll.client.validSession(sess)
+	err = iv.coll.client.validSession(sess)
 	if err != nil {
 		closeImplicitSession(sess)
 		return nil, err
@@ -98,7 +102,6 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 		Deployment(iv.coll.client.deployment)
 
 	var cursorOpts driver.CursorOptions
-	lio := options.MergeListIndexesOptions(opts...)
 	if lio.BatchSize != nil {
 		op = op.BatchSize(*lio.BatchSize)
 		cursorOpts.BatchSize = *lio.BatchSize
@@ -106,11 +109,7 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 	if lio.MaxTime != nil {
 		op = op.MaxTimeMS(int64(*lio.MaxTime / time.Millisecond))
 	}
-	retry := driver.RetryNone
-	if iv.coll.client.retryReads {
-		retry = driver.RetryOncePerCommand
-	}
-	op.Retry(retry)
+	op.Retry(iv.coll.client.retryReads)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -128,7 +127,7 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 		closeImplicitSession(sess)
 		return nil, replaceErrors(err)
 	}
-	cursor, err := newCursorWithSession(bc, iv.coll.registry, sess)
+	cursor, err := newCursorWithSession(bc, iv.coll.registry, sess, iv.coll.client, iv.coll.timeout)
 	return cursor, replaceErrors(err)
 }
 
@@ -177,6 +176,15 @@ func (iv IndexView) CreateOne(ctx context.Context, model IndexModel, opts ...*op
 //
 // For more information about the command, see https://docs.mongodb.com/manual/reference/command/createIndexes/.
 func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ...*options.CreateIndexesOptions) ([]string, error) {
+	option := options.MergeCreateIndexesOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, iv.coll.client, iv.coll.timeout, option.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
 	names := make([]string, 0, len(models))
 
 	var indexes bsoncore.Document
@@ -221,7 +229,7 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 		}
 	}
 
-	indexes, err := bsoncore.AppendArrayEnd(indexes, aidx)
+	indexes, err = bsoncore.AppendArrayEnd(indexes, aidx)
 	if err != nil {
 		return nil, err
 	}
@@ -250,9 +258,6 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 	}
 
 	selector := makePinnedSelector(sess, iv.coll.writeSelector)
-
-	option := options.MergeCreateIndexesOptions(opts...)
-
 	op := operation.NewCreateIndexes(indexes).
 		Session(sess).WriteConcern(wc).ClusterClock(iv.coll.client.clock).
 		Database(iv.coll.db.name).Collection(iv.coll.name).CommandMonitor(iv.coll.client.monitor).
@@ -365,13 +370,17 @@ func (iv IndexView) createOptionsDoc(opts *options.IndexOptions) (bsoncore.Docum
 }
 
 func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.DropIndexesOptions) (bson.Raw, error) {
-	if ctx == nil {
-		ctx = context.Background()
+	dio := options.MergeDropIndexesOptions(opts...)
+	ctx, cancel, err := getOperationContext(ctx, iv.coll.client, iv.coll.timeout, dio.MaxTime, nil)
+	if err != nil {
+		return nil, err
+	}
+	if cancel != nil {
+		defer cancel()
 	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && iv.coll.client.sessionPool != nil {
-		var err error
 		sess, err = session.NewClientSession(iv.coll.client.sessionPool, iv.coll.client.id, session.Implicit)
 		if err != nil {
 			return nil, err
@@ -379,7 +388,7 @@ func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.Drop
 		defer sess.EndSession()
 	}
 
-	err := iv.coll.client.validSession(sess)
+	err = iv.coll.client.validSession(sess)
 	if err != nil {
 		return nil, err
 	}
@@ -393,8 +402,6 @@ func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.Drop
 	}
 
 	selector := makePinnedSelector(sess, iv.coll.writeSelector)
-
-	dio := options.MergeDropIndexesOptions(opts...)
 	op := operation.NewDropIndexes(name).
 		Session(sess).WriteConcern(wc).CommandMonitor(iv.coll.client.monitor).
 		ServerSelector(selector).ClusterClock(iv.coll.client.clock).

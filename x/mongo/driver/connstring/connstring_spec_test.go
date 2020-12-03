@@ -105,6 +105,7 @@ var skipKeywords = []string{
 	"tlsAllowInvalidCertificates",
 	"tlsDisableCertificateRevocationCheck",
 	"serverSelectionTryOnce",
+	"waitQueueTimeoutMS",
 }
 
 func runTest(t *testing.T, filename string, test *testCase, warningsError bool) {

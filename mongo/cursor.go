@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
@@ -32,15 +34,17 @@ type Cursor struct {
 	batchLength   int
 	registry      *bsoncodec.Registry
 	clientSession *session.Client
+	client        *Client
+	timeout       *time.Duration
 
 	err error
 }
 
-func newCursor(bc batchCursor, registry *bsoncodec.Registry) (*Cursor, error) {
-	return newCursorWithSession(bc, registry, nil)
+func newCursor(bc batchCursor, registry *bsoncodec.Registry, client *Client, timeout *time.Duration) (*Cursor, error) {
+	return newCursorWithSession(bc, registry, nil, client, timeout)
 }
 
-func newCursorWithSession(bc batchCursor, registry *bsoncodec.Registry, clientSession *session.Client) (*Cursor, error) {
+func newCursorWithSession(bc batchCursor, registry *bsoncodec.Registry, clientSession *session.Client, client *Client, timeout *time.Duration) (*Cursor, error) {
 	if registry == nil {
 		registry = bson.DefaultRegistry
 	}
@@ -51,6 +55,8 @@ func newCursorWithSession(bc batchCursor, registry *bsoncodec.Registry, clientSe
 		bc:            bc,
 		registry:      registry,
 		clientSession: clientSession,
+		client:        client,
+		timeout:       timeout,
 	}
 	if bc.ID() == 0 {
 		c.closeImplicitSession()
@@ -102,9 +108,15 @@ func (c *Cursor) next(ctx context.Context, nonBlocking bool) bool {
 		return false
 	}
 
-	if ctx == nil {
-		ctx = context.Background()
+	ctx, cancel, err := getOperationContext(ctx, c.client, c.timeout, nil, nil)
+	if err != nil {
+		c.err = err
+		return false
 	}
+	if cancel != nil {
+		defer cancel()
+	}
+
 	doc, err := c.batch.Next()
 	switch err {
 	case nil:
@@ -176,7 +188,31 @@ func (c *Cursor) Err() error { return c.err }
 // the first call, any subsequent calls will not change the state.
 func (c *Cursor) Close(ctx context.Context) error {
 	defer c.closeImplicitSession()
+
+	ctx, cancel := c.getOperationContext(ctx)
+	if cancel != nil {
+		defer cancel()
+	}
+
 	return replaceErrors(c.bc.Close(ctx))
+}
+
+func (c *Cursor) getOperationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	// Honor overridden timeout if there is one.
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, nil
+	}
+
+	// No timeoutMS set -> continue legacy behavior
+	if c.timeout == nil {
+		return ctx, nil
+	}
+
+	minTimeout := c.client.connectTimeout
+	if *c.timeout != 0 {
+		minTimeout = time.Duration(math.Min(float64(minTimeout), float64(*c.timeout)))
+	}
+	return context.WithTimeout(ctx, minTimeout)
 }
 
 // All iterates the cursor and decodes each document into results. The results parameter must be a pointer to a slice.
@@ -199,9 +235,16 @@ func (c *Cursor) All(ctx context.Context, results interface{}) error {
 		return fmt.Errorf("results argument must be a pointer to a slice, but was a pointer to %s", sliceVal.Kind())
 	}
 
+	ctx, cancel, err := getOperationContext(ctx, c.client, c.timeout, nil, nil)
+	if err != nil {
+		return err
+	}
+	if cancel != nil {
+		defer cancel()
+	}
+
 	elementType := sliceVal.Type().Elem()
 	var index int
-	var err error
 
 	defer c.Close(ctx)
 

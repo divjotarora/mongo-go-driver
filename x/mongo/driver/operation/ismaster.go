@@ -214,10 +214,11 @@ func (im *IsMaster) StreamResponse(ctx context.Context, conn driver.StreamerConn
 
 func (im *IsMaster) createOperation() driver.Operation {
 	return driver.Operation{
-		Clock:      im.clock,
-		CommandFn:  im.command,
-		Database:   "admin",
-		Deployment: im.d,
+		CommandName: "isMaster",
+		Clock:       im.clock,
+		CommandFn:   im.command,
+		Database:    "admin",
+		Deployment:  im.d,
 		ProcessResponseFn: func(response bsoncore.Document, _ driver.Server, _ description.Server, _ int) error {
 			im.res = response
 			return nil
@@ -229,10 +230,11 @@ func (im *IsMaster) createOperation() driver.Operation {
 // information about the server. This function implements the driver.Handshaker interface.
 func (im *IsMaster) GetHandshakeInformation(ctx context.Context, _ address.Address, c driver.Connection) (driver.HandshakeInformation, error) {
 	err := driver.Operation{
-		Clock:      im.clock,
-		CommandFn:  im.handshakeCommand,
-		Deployment: driver.SingleConnectionDeployment{c},
-		Database:   "admin",
+		CommandName: "isMaster",
+		Clock:       im.clock,
+		CommandFn:   im.handshakeCommand,
+		Deployment:  driver.SingleConnectionDeployment{c},
+		Database:    "admin",
 		ProcessResponseFn: func(response bsoncore.Document, _ driver.Server, _ description.Server, _ int) error {
 			im.res = response
 			return nil

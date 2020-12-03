@@ -426,7 +426,7 @@
       ]
     },
     {
-      "description": "ListCollections fails after two NotMaster errors",
+      "description": "ListCollections succeeds after two NotMaster errors",
       "failPoint": {
         "configureFailPoint": "failCommand",
         "mode": {
@@ -442,8 +442,7 @@
       "operations": [
         {
           "name": "listCollections",
-          "object": "database",
-          "error": true
+          "object": "database"
         }
       ],
       "expectations": [

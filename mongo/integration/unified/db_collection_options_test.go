@@ -8,6 +8,7 @@ package unified
 
 import (
 	"fmt"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -22,10 +23,11 @@ type DBOrCollectionOptions struct {
 // to their corresponding Go objects.
 func (d *DBOrCollectionOptions) UnmarshalBSON(data []byte) error {
 	var temp struct {
-		RC    *readConcern           `bson:"readConcern"`
-		RP    *readPreference        `bson:"readPreference"`
-		WC    *writeConcern          `bson:"writeConcern"`
-		Extra map[string]interface{} `bson:",inline"`
+		RC        *readConcern           `bson:"readConcern"`
+		RP        *readPreference        `bson:"readPreference"`
+		WC        *writeConcern          `bson:"writeConcern"`
+		TimeoutMS *int64                 `bson:"timeoutMS"`
+		Extra     map[string]interface{} `bson:",inline"`
 	}
 	if err := bson.Unmarshal(data, &temp); err != nil {
 		return fmt.Errorf("error unmarshalling to temporary DBOrCollectionOptions object: %v", err)
@@ -58,6 +60,11 @@ func (d *DBOrCollectionOptions) UnmarshalBSON(data []byte) error {
 
 		d.DBOptions.SetWriteConcern(wc)
 		d.CollectionOptions.SetWriteConcern(wc)
+	}
+	if temp.TimeoutMS != nil {
+		timeout := time.Duration(*temp.TimeoutMS) * time.Millisecond
+		d.DBOptions.SetTimeout(timeout)
+		d.CollectionOptions.SetTimeout(timeout)
 	}
 
 	return nil

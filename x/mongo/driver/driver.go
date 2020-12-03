@@ -164,26 +164,3 @@ const (
 	Write
 	Read
 )
-
-// RetryMode specifies the way that retries are handled for retryable operations.
-type RetryMode uint
-
-// These are the modes available for retrying.
-const (
-	// RetryNone disables retrying.
-	RetryNone RetryMode = iota
-	// RetryOnce will enable retrying the entire operation once.
-	RetryOnce
-	// RetryOncePerCommand will enable retrying each command associated with an operation. For
-	// example, if an insert is batch split into 4 commands then each of those commands is eligible
-	// for one retry.
-	RetryOncePerCommand
-	// RetryContext will enable retrying until the context.Context's deadline is exceeded or it is
-	// cancelled.
-	RetryContext
-)
-
-// Enabled returns if this RetryMode enables retrying.
-func (rm RetryMode) Enabled() bool {
-	return rm == RetryOnce || rm == RetryOncePerCommand || rm == RetryContext
-}

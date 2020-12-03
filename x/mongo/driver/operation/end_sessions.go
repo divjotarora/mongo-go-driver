@@ -50,6 +50,7 @@ func (es *EndSessions) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "endSessions",
 		CommandFn:         es.command,
 		ProcessResponseFn: es.processResponse,
 		Client:            es.session,

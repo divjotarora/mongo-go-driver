@@ -89,7 +89,7 @@ func executeListCollections(ctx context.Context, operation *Operation) (*Operati
 	defer cursor.Close(ctx)
 
 	var docs []bson.Raw
-	if err := cursor.All(ctx, &cursor); err != nil {
+	if err := cursor.All(ctx, &docs); err != nil {
 		return NewErrorResult(err), nil
 	}
 	return NewCursorResult(docs), nil

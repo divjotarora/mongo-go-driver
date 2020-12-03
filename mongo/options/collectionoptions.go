@@ -7,6 +7,8 @@
 package options
 
 import (
+	"time"
+
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -30,6 +32,9 @@ type CollectionOptions struct {
 	// The BSON registry to marshal and unmarshal documents for operations executed on the Collection. The default value
 	// is nil, which means that the registry of the database used to configure the Collection will be used.
 	Registry *bsoncodec.Registry
+
+	// The per-operation timeout for all operations executed against this Collection.
+	Timeout *time.Duration
 }
 
 // Collection creates a new CollectionOptions instance.
@@ -61,6 +66,12 @@ func (c *CollectionOptions) SetRegistry(r *bsoncodec.Registry) *CollectionOption
 	return c
 }
 
+// SetTimeout sets the value for the Timeout field.
+func (c *CollectionOptions) SetTimeout(timeout time.Duration) *CollectionOptions {
+	c.Timeout = &timeout
+	return c
+}
+
 // MergeCollectionOptions combines the given CollectionOptions instances into a single *CollectionOptions in a
 // last-one-wins fashion.
 func MergeCollectionOptions(opts ...*CollectionOptions) *CollectionOptions {
@@ -81,6 +92,9 @@ func MergeCollectionOptions(opts ...*CollectionOptions) *CollectionOptions {
 		}
 		if opt.Registry != nil {
 			c.Registry = opt.Registry
+		}
+		if opt.Timeout != nil {
+			c.Timeout = opt.Timeout
 		}
 	}
 

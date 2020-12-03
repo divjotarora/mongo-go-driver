@@ -25,7 +25,7 @@ tests:
                     command:
                         aggregate: 1
                         cursor: {}
-                        pipeline: [ { $changeStream: { fullDocument: "default", "allChangesForCluster": true } } ]
+                        pipeline: [ { $changeStream: { "allChangesForCluster": true } } ]
                     database_name: admin
     -
         description: "client.watch succeeds on second attempt"
@@ -40,6 +40,15 @@ tests:
              - *retryable_command_started_event
              - *retryable_command_started_event
     -
+        description: "client.watch succeeds on third attempt"
+        failPoint:
+            <<: *failCommand_failPoint
+            mode: { times: 2 }
+        operations: [*retryable_operation]
+        expectations:
+             - *retryable_command_started_event
+             - *retryable_command_started_event
+    -
         description: "client.watch fails on first attempt"
         clientOptions:
             retryReads: false
@@ -49,13 +58,4 @@ tests:
                 <<: *retryable_operation
                 error: true
         expectations:
-             - *retryable_command_started_event
-    -
-        description: "client.watch fails on second attempt"
-        failPoint:
-            <<: *failCommand_failPoint
-            mode: { times: 2 }
-        operations: [*retryable_operation_fails]
-        expectations:
-             - *retryable_command_started_event
              - *retryable_command_started_event

@@ -36,7 +36,7 @@ type Count struct {
 	readConcern    *readconcern.ReadConcern
 	readPreference *readpref.ReadPref
 	selector       description.ServerSelector
-	retry          *driver.RetryMode
+	retry          bool
 	result         CountResult
 }
 
@@ -85,9 +85,10 @@ func (c *Count) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "count",
 		CommandFn:         c.command,
 		ProcessResponseFn: c.processResponse,
-		RetryMode:         c.retry,
+		Retry:             c.retry,
 		Type:              driver.Read,
 		Client:            c.session,
 		Clock:             c.clock,
@@ -235,11 +236,11 @@ func (c *Count) ServerSelector(selector description.ServerSelector) *Count {
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (c *Count) Retry(retry driver.RetryMode) *Count {
+func (c *Count) Retry(retry bool) *Count {
 	if c == nil {
 		c = new(Count)
 	}
 
-	c.retry = &retry
+	c.retry = retry
 	return c
 }

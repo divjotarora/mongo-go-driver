@@ -30,6 +30,7 @@ type ClientEntity struct {
 	succeeded       []*event.CommandSucceededEvent
 	failed          []*event.CommandFailedEvent
 	ignoredCommands map[string]struct{}
+	originalOptions *EntityOptions
 }
 
 func NewClientEntity(ctx context.Context, entityOptions *EntityOptions) (*ClientEntity, error) {
@@ -38,15 +39,22 @@ func NewClientEntity(ctx context.Context, entityOptions *EntityOptions) (*Client
 		ignoredCommands: map[string]struct{}{
 			"configureFailPoint": {},
 		},
+		originalOptions: entityOptions,
 	}
-	entity.setRecordEvents(true)
+	if err := entity.configureClient(ctx, entityOptions); err != nil {
+		return nil, err
+	}
 
+	return entity, nil
+}
+
+func (c *ClientEntity) configureClient(ctx context.Context, entityOptions *EntityOptions, extraOptions ...*options.ClientOptions) error {
 	// Construct a ClientOptions instance by first applying the cluster URI and then the URIOptions map to ensure that
 	// the options specified in the test file take precedence.
 	clientOpts := options.Client().ApplyURI(mtest.ClusterURI())
 	if entityOptions.URIOptions != nil {
 		if err := setClientOptionsFromURIOptions(clientOpts, entityOptions.URIOptions); err != nil {
-			return nil, fmt.Errorf("error parsing URI options: %v", err)
+			return fmt.Errorf("error parsing URI options: %v", err)
 		}
 	}
 	// UseMultipleMongoses is only relevant if we're connected to a sharded cluster. Options changes and validation are
@@ -54,7 +62,7 @@ func NewClientEntity(ctx context.Context, entityOptions *EntityOptions) (*Client
 	// includes all nodes and we don't enforce any limits on the number of nodes.
 	if mtest.ClusterTopologyKind() == mtest.Sharded && entityOptions.UseMultipleMongoses != nil {
 		if err := evaluateUseMultipleMongoses(clientOpts, *entityOptions.UseMultipleMongoses); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if entityOptions.ObserveEvents != nil {
@@ -66,38 +74,61 @@ func NewClientEntity(ctx context.Context, entityOptions *EntityOptions) (*Client
 		for _, eventType := range entityOptions.ObserveEvents {
 			switch eventType {
 			case "commandStartedEvent":
-				monitor.Started = entity.processStartedEvent
+				monitor.Started = c.processStartedEvent
 			case "commandSucceededEvent":
-				monitor.Succeeded = entity.processSucceededEvent
+				monitor.Succeeded = c.processSucceededEvent
 			case "commandFailedEvent":
-				monitor.Failed = entity.processFailedEvent
+				monitor.Failed = c.processFailedEvent
 			default:
-				return nil, fmt.Errorf("unrecognized event type %s", eventType)
+				return fmt.Errorf("unrecognized event type %s", eventType)
 			}
 		}
 		clientOpts.SetMonitor(monitor)
 	}
 	for _, cmd := range entityOptions.IgnoredCommands {
-		entity.ignoredCommands[cmd] = struct{}{}
+		c.ignoredCommands[cmd] = struct{}{}
 	}
 
-	client, err := mongo.Connect(ctx, clientOpts)
+	allOptions := []*options.ClientOptions{clientOpts}
+	client, err := mongo.Connect(ctx, append(allOptions, extraOptions...)...)
 	if err != nil {
-		return nil, fmt.Errorf("error creating mongo.Client: %v", err)
+		return fmt.Errorf("error creating mongo.Client: %v", err)
 	}
 
-	entity.Client = client
-	return entity, nil
+	c.setRecordEvents(false)
+	if c.Client != nil {
+		if err := c.Client.Disconnect(ctx); err != nil {
+			return fmt.Errorf("error disconnecting old Client: %v", err)
+		}
+	}
+	c.Client = client
+	c.setRecordEvents(true)
+	return nil
+}
+
+func (c *ClientEntity) Clone(ctx context.Context, clientOptions *options.ClientOptions) error {
+	return c.configureClient(ctx, c.originalOptions, clientOptions)
+}
+
+func (c *ClientEntity) Reset(ctx context.Context) error {
+	return c.configureClient(ctx, c.originalOptions)
 }
 
 func (c *ClientEntity) StopListeningForEvents() {
 	c.setRecordEvents(false)
 }
 
-func (c *ClientEntity) StartedEvents() []*event.CommandStartedEvent {
+// StartedEvents returns a slice of the CommandStartedEvent instances captured for this entity. Events for any commands
+// that are ignored for this entity are not included. The filter parameter optionally provides a more restrictive
+// filtering mechanism. Each captured event will only be included in the returned slice if the filter is nil or if
+// filter(event) returns true.
+func (c *ClientEntity) StartedEvents(filter func(*event.CommandStartedEvent) bool) []*event.CommandStartedEvent {
 	var events []*event.CommandStartedEvent
 	for _, evt := range c.started {
-		if _, ok := c.ignoredCommands[evt.CommandName]; !ok {
+		if _, ok := c.ignoredCommands[evt.CommandName]; ok {
+			continue
+		}
+		if filter == nil || filter(evt) {
 			events = append(events, evt)
 		}
 	}
@@ -105,10 +136,17 @@ func (c *ClientEntity) StartedEvents() []*event.CommandStartedEvent {
 	return events
 }
 
-func (c *ClientEntity) SucceededEvents() []*event.CommandSucceededEvent {
+// StartedEvents returns a slice of the CommandSucceededEvent instances captured for this entity. Events for any
+// commands that are ignored for this entity are not included. The filter parameter optionally provides a more
+// restrictive filtering mechanism. Each captured event will only be included in the returned slice if the filter is nil
+// or if filter(event) returns true.
+func (c *ClientEntity) SucceededEvents(filter func(*event.CommandSucceededEvent) bool) []*event.CommandSucceededEvent {
 	var events []*event.CommandSucceededEvent
 	for _, evt := range c.succeeded {
-		if _, ok := c.ignoredCommands[evt.CommandName]; !ok {
+		if _, ok := c.ignoredCommands[evt.CommandName]; ok {
+			continue
+		}
+		if filter == nil || filter(evt) {
 			events = append(events, evt)
 		}
 	}
@@ -116,10 +154,17 @@ func (c *ClientEntity) SucceededEvents() []*event.CommandSucceededEvent {
 	return events
 }
 
-func (c *ClientEntity) FailedEvents() []*event.CommandFailedEvent {
+// StartedEvents returns a slice of the CommandFailedEvent instances captured for this entity. Events for any commands
+// that are ignored for this entity are not included. The filter parameter optionally provides a more restrictive
+// filtering mechanism. Each captured event will only be included in the returned slice if the filter is nil or if
+// filter(event) returns true.
+func (c *ClientEntity) FailedEvents(filter func(*event.CommandFailedEvent) bool) []*event.CommandFailedEvent {
 	var events []*event.CommandFailedEvent
 	for _, evt := range c.failed {
-		if _, ok := c.ignoredCommands[evt.CommandName]; !ok {
+		if _, ok := c.ignoredCommands[evt.CommandName]; ok {
+			continue
+		}
+		if filter == nil || filter(evt) {
 			events = append(events, evt)
 		}
 	}
@@ -161,6 +206,8 @@ func setClientOptionsFromURIOptions(clientOpts *options.ClientOptions, uriOpts b
 
 	for key, value := range uriOpts {
 		switch key {
+		case "connectTimeoutMS":
+			clientOpts.SetConnectTimeout(time.Duration(value.(int32)) * time.Millisecond)
 		case "heartbeatFrequencyMS":
 			clientOpts.SetHeartbeatInterval(time.Duration(value.(int32)) * time.Millisecond)
 		case "readConcernLevel":
@@ -169,8 +216,18 @@ func setClientOptionsFromURIOptions(clientOpts *options.ClientOptions, uriOpts b
 			clientOpts.SetRetryReads(value.(bool))
 		case "retryWrites":
 			clientOpts.SetRetryWrites(value.(bool))
+		case "socketTimeoutMS":
+			clientOpts.SetSocketTimeout(time.Duration(value.(int32)) * time.Millisecond)
+		case "timeoutMS":
+			clientOpts.SetTimeout(time.Duration(value.(int32)) * time.Millisecond)
 		case "w":
 			wc.W = value
+			wcSet = true
+		case "waitQueueTimeoutMS":
+			return NewSkipTestError("waitQueueTimeoutMS Client option is not supported")
+		case "wTimeoutMS":
+			wtms := value.(int32)
+			wc.WTimeoutMS = &wtms
 			wcSet = true
 		default:
 			return fmt.Errorf("unrecognized URI option %s", key)

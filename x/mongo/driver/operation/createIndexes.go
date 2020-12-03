@@ -102,6 +102,7 @@ func (ci *CreateIndexes) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "createIndexes",
 		CommandFn:         ci.command,
 		ProcessResponseFn: ci.processResponse,
 		Client:            ci.session,

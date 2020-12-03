@@ -1,0 +1,4653 @@
+description: "operations error if timeoutMS is used with a deprecated timeout option"
+
+schemaVersion: "1.2"
+
+# Most tests in this file can be executed against any server version, but some tests execute operations that are only
+# available on higher server versions (e.g. abortTransaction). To avoid too many special cases in templated tests, the
+# min server version is set to 4.2 for all.
+runOnRequirements:
+  - minServerVersion: "4.2"
+
+initialData:
+  - collectionName: &collectionName coll
+    databaseName: &databaseName test
+    documents: []
+
+tests:
+  # One-off tests to assert that drivers error if both maxCommitTimeMS and timeoutMS are set.
+
+  - description: "abortTransaction errors if maxCommitTimeMS and timeoutMS are both specified"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - session:
+                id: &session session
+                client: *client
+                sessionOptions:
+                  defaultTransactionOptions:
+                    maxCommitTimeMS: 10
+      - name: startTransaction
+        object: *session
+      - name: abortTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+        expectError:
+          isClientError: true
+
+  - description: "commitTransaction errors if maxCommitTimeMS and timeoutMS are both specified"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - session:
+                id: &session session
+                client: *client
+                sessionOptions:
+                  defaultTransactionOptions:
+                    maxCommitTimeMS: 10
+      - name: startTransaction
+        object: *session
+      - name: commitTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+        expectError:
+          isClientError: true
+
+  - description: "withTransaction errors if maxCommitTimeMS and timeoutMS are both specified"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - session:
+                id: &session session
+                client: *client
+                sessionOptions:
+                  defaultTransactionOptions:
+                    maxCommitTimeMS: 10
+      - name: withTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          callback: []
+        expectError:
+          isClientError: true
+
+  # For each operation, run these tests:
+  #
+  # 1. Error if both socketTimeoutMS and timeoutMS are set.
+  # 2. Error if both waitQueueTimeoutMS and timeoutMS are set.
+  # 3. Error if both wTimeoutMS and timeoutMS are set.
+  # 4. If the operation supports the maxTimeMS option, error if both maxTimeMS and timeoutMS are set.
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listDatabases on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabases
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listDatabases on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabases
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listDatabases on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabases
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listDatabaseNames on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabaseNames
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listDatabaseNames on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabaseNames
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listDatabaseNames on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listDatabaseNames
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - createChangeStream on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - createChangeStream on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - createChangeStream on client"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *client
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - aggregate on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - aggregate on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - aggregate on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - aggregate on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listCollections on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollections
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listCollections on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollections
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listCollections on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollections
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listCollectionNames on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollectionNames
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listCollectionNames on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollectionNames
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listCollectionNames on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listCollectionNames
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - runCommand on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: runCommand
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          command: { ping: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - runCommand on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: runCommand
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          command: { ping: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - runCommand on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: runCommand
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          command: { ping: 1 }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - createChangeStream on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - createChangeStream on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - createChangeStream on database"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *database
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - aggregate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - aggregate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - aggregate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - aggregate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: aggregate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - count on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: count
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - count on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: count
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - count on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: count
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - count on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: count
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - countDocuments on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: countDocuments
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - countDocuments on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: countDocuments
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - countDocuments on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: countDocuments
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - estimatedDocumentCount on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: estimatedDocumentCount
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - estimatedDocumentCount on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: estimatedDocumentCount
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - estimatedDocumentCount on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: estimatedDocumentCount
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - estimatedDocumentCount on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: estimatedDocumentCount
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - distinct on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: distinct
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          fieldName: x
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - distinct on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: distinct
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          fieldName: x
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - distinct on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: distinct
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          fieldName: x
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - distinct on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: distinct
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          fieldName: x
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - find on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - find on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - find on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - find on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - findOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - findOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - findOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - findOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - listIndexNames on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexNames
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - listIndexNames on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexNames
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - listIndexNames on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: listIndexNames
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - createChangeStream on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - createChangeStream on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - createChangeStream on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createChangeStream
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          pipeline: []
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - insertOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          document: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - insertOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          document: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - insertOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          document: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - insertMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          documents:
+            - { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - insertMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          documents:
+            - { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - insertMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: insertMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          documents:
+            - { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - deleteOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - deleteOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - deleteOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - deleteMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - deleteMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - deleteMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: deleteMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - replaceOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: replaceOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - replaceOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: replaceOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - replaceOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: replaceOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - updateOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - updateOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - updateOne on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateOne
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - updateMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - updateMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - updateMany on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: updateMany
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - findOneAndDelete on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndDelete
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - findOneAndDelete on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndDelete
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - findOneAndDelete on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndDelete
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - findOneAndDelete on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndDelete
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - findOneAndReplace on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndReplace
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - findOneAndReplace on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndReplace
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - findOneAndReplace on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndReplace
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - findOneAndReplace on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndReplace
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          replacement: { x: 1 }
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - findOneAndUpdate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndUpdate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - findOneAndUpdate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndUpdate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - findOneAndUpdate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndUpdate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - findOneAndUpdate on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: findOneAndUpdate
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          update: { $set: { x: 1 } }
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - bulkWrite on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: bulkWrite
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          requests:
+            - insertOne:
+                document: { _id: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - bulkWrite on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: bulkWrite
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          requests:
+            - insertOne:
+                document: { _id: 1 }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - bulkWrite on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: bulkWrite
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          requests:
+            - insertOne:
+                document: { _id: 1 }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - createIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          keys: { x: 1 }
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - createIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          keys: { x: 1 }
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - createIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          keys: { x: 1 }
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - createIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: createIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          keys: { x: 1 }
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - dropIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - dropIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - dropIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - dropIndex on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndex
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          name: "x_1"
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - dropIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - dropIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - dropIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - dropIndexes on collection"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: dropIndexes
+        object: *collection
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - commitTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: commitTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - commitTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: commitTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - commitTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: commitTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - abortTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: abortTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - abortTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: abortTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - abortTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: abortTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - withTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: withTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          callback: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - withTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: withTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          callback: []
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - withTransaction on session"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: withTransaction
+        object: *session
+        arguments:
+          timeoutMS: 100000
+          callback: []
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - upload on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: upload
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filename: filename
+          source: { $$hexBytes: "1122334455" }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - upload on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: upload
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filename: filename
+          source: { $$hexBytes: "1122334455" }
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - upload on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: upload
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filename: filename
+          source: { $$hexBytes: "1122334455" }
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - download on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: download
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - download on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: download
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - download on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: download
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - delete on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: delete
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - delete on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: delete
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - delete on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: delete
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - find on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - find on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - find on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if maxTimeMS and timeoutMS are both specified - find on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: find
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          maxTimeMS: 100000
+          filter: {}
+          
+        expectError:
+          isClientError: true
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - rename on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: rename
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          newFilename: newName
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - rename on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: rename
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          newFilename: newName
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - rename on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: rename
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          id: nonExistentId
+          newFilename: newName
+          
+        expectError:
+          isClientError: true
+
+  
+  - description: "error if socketTimeoutMS and timeoutMS are both specified - drop on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  socketTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: drop
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if waitQueueTimeoutMS and timeoutMS are both specified - drop on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  waitQueueTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: drop
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  - description: "error if wTimeoutMS and timeoutMS are both specified - drop on bucket"
+    operations:
+      - name: createEntities
+        object: testRunner
+        arguments:
+          entities:
+            - client:
+                id: &client client
+                uriOptions:
+                  wTimeoutMS: 10
+            - database:
+                id: &database database
+                client: *client
+                databaseName: *databaseName
+            - collection:
+                id: &collection collection
+                database: *database
+                collectionName: *collectionName
+            - bucket:
+                id: &bucket bucket
+                database: *database
+            - session:
+                id: &session session
+                client: *client
+      - name: drop
+        object: *bucket
+        arguments:
+          timeoutMS: 100000
+          
+        expectError:
+          isClientError: true
+
+  

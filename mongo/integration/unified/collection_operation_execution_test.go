@@ -121,7 +121,8 @@ func executeBulkWrite(ctx context.Context, operation *Operation) (*OperationResu
 		return nil, newMissingArgumentError("requests")
 	}
 
-	res, err := coll.BulkWrite(ctx, models, opts)
+	// Preserve the error from BulkWrite in a separate variable so "err" can be used elsewhere.
+	res, bulkWriteErr := coll.BulkWrite(ctx, models, opts)
 	raw := emptyCoreDocument
 	if res != nil {
 		rawUpsertedIDs := emptyDocument
@@ -141,7 +142,7 @@ func executeBulkWrite(ctx context.Context, operation *Operation) (*OperationResu
 			AppendDocument("upsertedIds", rawUpsertedIDs).
 			Build()
 	}
-	return NewDocumentResult(raw, err), nil
+	return NewDocumentResult(raw, bulkWriteErr), nil
 }
 
 func executeCountDocuments(ctx context.Context, operation *Operation) (*OperationResult, error) {
@@ -201,7 +202,8 @@ func executeCreateIndex(ctx context.Context, operation *Operation) (*OperationRe
 	}
 
 	var keys bson.Raw
-	indexOpts := options.Index()
+	indexOpts := options.Index()       // options to configure the created index
+	cmdOpts := options.CreateIndexes() // options to configure the command
 
 	elems, _ := operation.Arguments.Elements()
 	for _, elem := range elems {
@@ -209,6 +211,7 @@ func executeCreateIndex(ctx context.Context, operation *Operation) (*OperationRe
 		val := elem.Value()
 
 		switch key {
+		// Index options
 		case "2dsphereIndexVersion":
 			indexOpts.SetSphereVersion(val.Int32())
 		case "background":
@@ -255,6 +258,11 @@ func executeCreateIndex(ctx context.Context, operation *Operation) (*OperationRe
 			indexOpts.SetWeights(val.Document())
 		case "wildcardProjection":
 			indexOpts.SetWildcardProjection(val.Document())
+
+		// createIndexes command options
+		case "maxTimeMS":
+			cmdOpts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+
 		default:
 			return nil, fmt.Errorf("unrecognized createIndex option %q", key)
 		}
@@ -267,8 +275,8 @@ func executeCreateIndex(ctx context.Context, operation *Operation) (*OperationRe
 		Keys:    keys,
 		Options: indexOpts,
 	}
-	name, err := coll.Indexes().CreateOne(ctx, model)
-	return NewValueResult(bsontype.String, bsoncore.AppendString(nil, name), nil), nil
+	name, err := coll.Indexes().CreateOne(ctx, model, cmdOpts)
+	return NewValueResult(bsontype.String, bsoncore.AppendString(nil, name), err), nil
 }
 
 func executeDeleteOne(ctx context.Context, operation *Operation) (*OperationResult, error) {
@@ -415,6 +423,34 @@ func executeDistinct(ctx context.Context, operation *Operation) (*OperationResul
 	return NewValueResult(bsontype.Array, rawRes, nil), nil
 }
 
+func executeDropIndex(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	args, err := createDropIndexesArguments(operation.Arguments, true)
+	if err != nil {
+		return nil, err
+	}
+	res, err := coll.Indexes().DropOne(ctx, args.name, args.opts)
+	return NewDocumentResult(res, err), nil
+}
+
+func executeDropIndexes(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	args, err := createDropIndexesArguments(operation.Arguments, false)
+	if err != nil {
+		return nil, err
+	}
+	res, err := coll.Indexes().DropAll(ctx, args.opts)
+	return NewDocumentResult(res, err), nil
+}
+
 func executeEstimatedDocumentCount(ctx context.Context, operation *Operation) (*OperationResult, error) {
 	coll, err := Entities(ctx).Collection(operation.Object)
 	if err != nil {
@@ -442,7 +478,134 @@ func executeEstimatedDocumentCount(ctx context.Context, operation *Operation) (*
 	return NewValueResult(bsontype.Int64, bsoncore.AppendInt64(nil, count), nil), nil
 }
 
-func executeFind(ctx context.Context, operation *Operation) (*OperationResult, error) {
+func executeCreateFindCursor(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	result, err := createFindCursor(ctx, operation)
+	if err != nil {
+		return nil, err
+	}
+	if result.err != nil {
+		return NewErrorResult(result.err), nil
+	}
+
+	if operation.ResultEntityID == nil {
+		return nil, fmt.Errorf("no entity name provided to store executeChangeStream result")
+	}
+	if err := Entities(ctx).AddIteratorEntity(*operation.ResultEntityID, result.cursor); err != nil {
+		return nil, fmt.Errorf("error storing result as cursor entity: %v", err)
+	}
+	return NewEmptyResult(), nil
+}
+
+func executeCollectionFind(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	timeoutMode := cursorLifetime
+	if mode, err := operation.Arguments.LookupErr("timeoutMode"); err == nil {
+		if mode.StringValue() == "iteration" {
+			timeoutMode = iteration
+		}
+		operation.Arguments = RemoveFieldsFromDocument(operation.Arguments, "timeoutMode")
+	}
+
+	// TODO: handle timeoutMode=cursorLifetime + timeoutMS inherited from collection
+
+	result, err := createFindCursor(ctx, operation)
+	if err != nil {
+		return nil, err
+	}
+	if result.err != nil {
+		return NewErrorResult(result.err), nil
+	}
+
+	defer result.cursor.Close(ctx)
+
+	switch timeoutMode {
+	case cursorLifetime:
+		// Mimic timeoutMode=cursorLifetime by using All(). This will automatically handle both the inheritance and
+		// override use cases.
+		res, err := result.cursor.All(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("cursor iteration error: %v", err)
+		}
+		if res.Err != nil {
+			return NewErrorResult(res.Err), nil
+		}
+		return NewCursorResult(res.Documents), nil
+	default:
+		// If timeoutMode=iteration, the timeout should be refreshed for each Next() call.
+
+		var docs []bson.Raw
+		for {
+			ctx, cancel := getCursorOperationContext(ctx, result.cursor)
+			if cancel != nil {
+				defer cancel()
+			}
+
+			if result.cursor.Next(ctx) {
+				doc, err := result.cursor.Current()
+				if err != nil {
+					return nil, err
+				}
+				docs = append(docs, doc)
+				continue
+			}
+			break
+		}
+		if err := result.cursor.Err(); err != nil {
+			return NewErrorResult(err), nil
+		}
+		return NewCursorResult(docs), nil
+	}
+}
+
+func executeFindOne(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	var filter bson.Raw
+	opts := options.FindOne()
+
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "filter":
+			filter = val.Document()
+		case "maxTimeMS":
+			opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+		default:
+			return nil, fmt.Errorf("unrecognized findOne option %q", key)
+		}
+	}
+	if filter == nil {
+		return nil, newMissingArgumentError("filter")
+	}
+
+	res, err := coll.FindOne(ctx, filter, opts).DecodeBytes()
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return NewDocumentResult(res, err), nil
+}
+
+type cursorTimeoutMode int
+
+const (
+	cursorLifetime cursorTimeoutMode = iota
+	iteration
+)
+
+type cursorResult struct {
+	cursor *IteratorEntity
+	err    error
+}
+
+// createFindCursor is a helper used to execute a "find" command and return the created cursor. Errors encountered
+// during operation setup will result in a (nil, err) return. Errors encountered during operation execution will be
+// returned as part of the cursorResult.
+func createFindCursor(ctx context.Context, operation *Operation) (*cursorResult, error) {
 	coll, err := Entities(ctx).Collection(operation.Object)
 	if err != nil {
 		return nil, err
@@ -471,6 +634,17 @@ func executeFind(ctx context.Context, operation *Operation) (*OperationResult, e
 			opts.SetCollation(collation)
 		case "comment":
 			opts.SetComment(val.StringValue())
+		case "cursorType":
+			var cursorType options.CursorType
+			switch typeStr := val.StringValue(); typeStr {
+			case "tailable":
+				cursorType = options.Tailable
+			case "tailableAwait":
+				cursorType = options.TailableAwait
+			default:
+				return nil, fmt.Errorf("unrecognized cursorType value %q", typeStr)
+			}
+			opts.SetCursorType(cursorType)
 		case "filter":
 			filter = val.Document()
 		case "hint":
@@ -483,6 +657,8 @@ func executeFind(ctx context.Context, operation *Operation) (*OperationResult, e
 			opts.SetLimit(int64(val.Int32()))
 		case "max":
 			opts.SetMax(val.Document())
+		case "maxAwaitTimeMS":
+			opts.SetMaxAwaitTime(time.Duration(val.Int32()) * time.Millisecond)
 		case "maxTimeMS":
 			opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
 		case "min":
@@ -513,15 +689,82 @@ func executeFind(ctx context.Context, operation *Operation) (*OperationResult, e
 
 	cursor, err := coll.Find(ctx, filter, opts)
 	if err != nil {
-		return NewErrorResult(err), nil
+		return &cursorResult{err: err}, nil
 	}
-	defer cursor.Close(ctx)
+	return &cursorResult{cursor: NewIteratorEntity(ctx, cursor)}, nil
+}
 
-	var docs []bson.Raw
-	if err := cursor.All(ctx, &docs); err != nil {
-		return NewErrorResult(err), nil
+func executeFindOneAndDelete(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
 	}
-	return NewCursorResult(docs), nil
+
+	var filter bson.Raw
+	opts := options.FindOneAndDelete()
+
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "filter":
+			filter = val.Document()
+		case "maxTimeMS":
+			opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+		default:
+			return nil, fmt.Errorf("unrecognized findOneAndDelete option %q", key)
+		}
+	}
+	if filter == nil {
+		return nil, newMissingArgumentError("filter")
+	}
+
+	res, err := coll.FindOneAndDelete(ctx, filter, opts).DecodeBytes()
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return NewDocumentResult(res, err), nil
+}
+
+func executeFindOneAndReplace(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	var filter, replacement bson.Raw
+	opts := options.FindOneAndReplace()
+
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "filter":
+			filter = val.Document()
+		case "maxTimeMS":
+			opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+		case "replacement":
+			replacement = val.Document()
+		default:
+			return nil, fmt.Errorf("unrecognized findOneAndReplace option %q", key)
+		}
+	}
+	if filter == nil {
+		return nil, newMissingArgumentError("filter")
+	}
+	if replacement == nil {
+		return nil, newMissingArgumentError("replacement")
+	}
+
+	res, err := coll.FindOneAndReplace(ctx, filter, replacement, opts).DecodeBytes()
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
+	return NewDocumentResult(res, err), nil
 }
 
 func executeFindOneAndUpdate(ctx context.Context, operation *Operation) (*OperationResult, error) {
@@ -594,6 +837,9 @@ func executeFindOneAndUpdate(ctx context.Context, operation *Operation) (*Operat
 	}
 
 	res, err := coll.FindOneAndUpdate(ctx, filter, update, opts).DecodeBytes()
+	if err == mongo.ErrNoDocuments {
+		err = nil
+	}
 	return NewDocumentResult(res, err), nil
 }
 
@@ -681,6 +927,40 @@ func executeInsertOne(ctx context.Context, operation *Operation) (*OperationResu
 			Build()
 	}
 	return NewDocumentResult(raw, err), nil
+}
+
+func executeListIndexes(ctx context.Context, operation *Operation) (*OperationResult, error) {
+	coll, err := Entities(ctx).Collection(operation.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := options.ListIndexes()
+	elems, _ := operation.Arguments.Elements()
+	for _, elem := range elems {
+		key := elem.Key()
+		val := elem.Value()
+
+		switch key {
+		case "maxTimeMS":
+			opts.SetMaxTime(time.Duration(val.Int32()) * time.Millisecond)
+		default:
+			return nil, fmt.Errorf("unrecognized listIndexes option %q", key)
+		}
+	}
+
+	cursor, err := coll.Indexes().List(ctx)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	defer cursor.Close(ctx)
+	var docs []bson.Raw
+	if err := cursor.All(ctx, &docs); err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	return NewCursorResult(docs), nil
 }
 
 func executeReplaceOne(ctx context.Context, operation *Operation) (*OperationResult, error) {

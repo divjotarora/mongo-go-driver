@@ -17,12 +17,14 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 )
 
 type CollectionData struct {
-	DatabaseName   string     `bson:"databaseName"`
-	CollectionName string     `bson:"collectionName"`
-	Documents      []bson.Raw `bson:"documents"`
+	DatabaseName      string     `bson:"databaseName"`
+	CollectionName    string     `bson:"collectionName"`
+	CollectionOptions bson.Raw   `bson:"collectionOptions"`
+	Documents         []bson.Raw `bson:"documents"`
 }
 
 // CreateCollection configures the collection represented by the receiver using the internal client. This function
@@ -34,22 +36,44 @@ func (c *CollectionData) CreateCollection(ctx context.Context) error {
 		return fmt.Errorf("error dropping collection: %v", err)
 	}
 
+	writeConcern := bsoncore.NewDocumentBuilder().
+		AppendString("w", "majority").
+		Build()
+
+	// Create the collection with options if necessary.
+	if c.CollectionOptions != nil {
+		cmd := bsoncore.NewDocumentBuilder().
+			AppendString("create", coll.Name()).
+			AppendDocument("writeConcern", writeConcern)
+
+		elems, _ := c.CollectionOptions.Elements()
+		for _, elem := range elems {
+			cmd.AppendValue(elem.Key(), RawValueToCoreValue(elem.Value()))
+		}
+
+		if err := db.RunCommand(ctx, cmd.Build()).Err(); err != nil {
+			return fmt.Errorf("error creating collection with options: %v", err)
+		}
+	}
+
 	// If no data is given, create the collection with write concern "majority".
 	if len(c.Documents) == 0 {
-		// The write concern has to be manually specified in the command document because RunCommand does not honor
-		// the database's write concern.
-		create := bson.D{
-			{"create", coll.Name()},
-			{"writeConcern", bson.D{
-				{"w", "majority"},
-			}},
+		// If CollectionOptions is set, the collection has already been created.
+		if c.CollectionOptions != nil {
+			return nil
 		}
-		if err := db.RunCommand(ctx, create).Err(); err != nil {
-			return fmt.Errorf("error creating collection: %v", err)
+
+		cmd := bsoncore.NewDocumentBuilder().
+			AppendString("create", coll.Name()).
+			AppendDocument("writeConcern", writeConcern).
+			Build()
+		if err := db.RunCommand(ctx, cmd).Err(); err != nil {
+			return fmt.Errorf("error creating collection without options: %v", err)
 		}
 		return nil
 	}
 
+	// Insert the test data.
 	docs := testhelpers.RawSliceToInterfaceSlice(c.Documents)
 	if _, err := coll.InsertMany(ctx, docs); err != nil {
 		return fmt.Errorf("error inserting data: %v", err)

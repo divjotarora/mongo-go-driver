@@ -28,7 +28,10 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage"
 )
 
-var globalConnectionID uint64 = 1
+var (
+	globalConnectionID uint64 = 1
+	emptyTime                 = time.Time{}
+)
 
 func nextConnectionID() uint64 { return atomic.AddUint64(&globalConnectionID, 1) }
 
@@ -247,7 +250,7 @@ func (c *connection) closeConnectContext() {
 	}
 }
 
-func transformNetworkError(ctx context.Context, originalError error, contextDeadlineUsed bool) error {
+func transformNetworkError(ctx context.Context, originalError error) error {
 	if originalError == nil {
 		return nil
 	}
@@ -259,7 +262,7 @@ func transformNetworkError(ctx context.Context, originalError error, contextDead
 
 	// If there was a timeout error and the context deadline was used, we convert the error into
 	// context.DeadlineExceeded.
-	if !contextDeadlineUsed {
+	if _, ok := ctx.Deadline(); !ok {
 		return originalError
 	}
 	if netErr, ok := originalError.(net.Error); ok && netErr.Timeout() {
@@ -267,6 +270,19 @@ func transformNetworkError(ctx context.Context, originalError error, contextDead
 	}
 
 	return originalError
+}
+
+func getSocketDeadline(ctx context.Context, timeout time.Duration) time.Time {
+	// socketTimeoutMS and context deadlines can't be used together, so we can use whichever one is set without having
+	// to compare them to calculate the minimum.
+
+	if timeout != 0 {
+		return time.Now().Add(timeout)
+	}
+	if dl, ok := ctx.Deadline(); ok {
+		return dl
+	}
+	return emptyTime
 }
 
 func (c *connection) cancellationListenerCallback() {
@@ -284,17 +300,7 @@ func (c *connection) writeWireMessage(ctx context.Context, wm []byte) error {
 	default:
 	}
 
-	var deadline time.Time
-	if c.writeTimeout != 0 {
-		deadline = time.Now().Add(c.writeTimeout)
-	}
-
-	var contextDeadlineUsed bool
-	if dl, ok := ctx.Deadline(); ok && (deadline.IsZero() || dl.Before(deadline)) {
-		contextDeadlineUsed = true
-		deadline = dl
-	}
-
+	deadline := getSocketDeadline(ctx, c.writeTimeout)
 	if err := c.nc.SetWriteDeadline(deadline); err != nil {
 		return ConnectionError{ConnectionID: c.id, Wrapped: err, message: "failed to set write deadline"}
 	}
@@ -304,7 +310,7 @@ func (c *connection) writeWireMessage(ctx context.Context, wm []byte) error {
 		c.close()
 		return ConnectionError{
 			ConnectionID: c.id,
-			Wrapped:      transformNetworkError(ctx, err, contextDeadlineUsed),
+			Wrapped:      transformNetworkError(ctx, err),
 			message:      "unable to write wire message to network",
 		}
 	}
@@ -344,17 +350,7 @@ func (c *connection) readWireMessage(ctx context.Context, dst []byte) ([]byte, e
 	default:
 	}
 
-	var deadline time.Time
-	if c.readTimeout != 0 {
-		deadline = time.Now().Add(c.readTimeout)
-	}
-
-	var contextDeadlineUsed bool
-	if dl, ok := ctx.Deadline(); ok && (deadline.IsZero() || dl.Before(deadline)) {
-		contextDeadlineUsed = true
-		deadline = dl
-	}
-
+	deadline := getSocketDeadline(ctx, c.readTimeout)
 	if err := c.nc.SetReadDeadline(deadline); err != nil {
 		return nil, ConnectionError{ConnectionID: c.id, Wrapped: err, message: "failed to set read deadline"}
 	}
@@ -369,7 +365,7 @@ func (c *connection) readWireMessage(ctx context.Context, dst []byte) ([]byte, e
 		}
 		return nil, ConnectionError{
 			ConnectionID: c.id,
-			Wrapped:      transformNetworkError(ctx, err, contextDeadlineUsed),
+			Wrapped:      transformNetworkError(ctx, err),
 			message:      message,
 		}
 	}

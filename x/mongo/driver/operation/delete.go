@@ -34,7 +34,7 @@ type Delete struct {
 	deployment   driver.Deployment
 	selector     description.ServerSelector
 	writeConcern *writeconcern.WriteConcern
-	retry        *driver.RetryMode
+	retry        bool
 	hint         *bool
 	result       DeleteResult
 }
@@ -91,10 +91,11 @@ func (d *Delete) Execute(ctx context.Context) error {
 	}
 
 	return driver.Operation{
+		CommandName:       "delete",
 		CommandFn:         d.command,
 		ProcessResponseFn: d.processResponse,
 		Batches:           batches,
-		RetryMode:         d.retry,
+		Retry:             d.retry,
 		Type:              driver.Write,
 		Client:            d.session,
 		Clock:             d.clock,
@@ -239,12 +240,12 @@ func (d *Delete) WriteConcern(writeConcern *writeconcern.WriteConcern) *Delete {
 
 // Retry enables retryable mode for this operation. Retries are handled automatically in driver.Operation.Execute based
 // on how the operation is set.
-func (d *Delete) Retry(retry driver.RetryMode) *Delete {
+func (d *Delete) Retry(retry bool) *Delete {
 	if d == nil {
 		d = new(Delete)
 	}
 
-	d.retry = &retry
+	d.retry = retry
 	return d
 }
 

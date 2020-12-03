@@ -111,6 +111,8 @@ type ConnString struct {
 	SSLCaFileSet                       bool
 	SSLDisableOCSPEndpointCheck        bool
 	SSLDisableOCSPEndpointCheckSet     bool
+	Timeout                            time.Duration
+	TimeoutSet                         bool
 	WString                            string
 	WNumber                            int
 	WNumberSet                         bool
@@ -338,6 +340,14 @@ func (p *parser) validate() error {
 		if p.Scheme == SchemeMongoDBSRV {
 			return errors.New("a direct connection cannot be made if an SRV URI is used")
 		}
+	}
+
+	// timeoutMS cannot be used with a deprecated timeout option.
+	if p.TimeoutSet && p.SocketTimeoutSet {
+		return errors.New("the timeoutMS and socketTimeoutMS URI options cannot be used together")
+	}
+	if p.TimeoutSet && p.WTimeoutSet {
+		return errors.New("the timeoutMS and wTimeoutMS URI options cannot be used together")
 	}
 
 	return nil
@@ -787,6 +797,14 @@ func (p *parser) addOption(pair string) error {
 		p.SSLSet = true
 		p.SSLCaFile = value
 		p.SSLCaFileSet = true
+	case "timeoutms":
+		tms, err := strconv.Atoi(value)
+		if err != nil || tms < 0 {
+			return fmt.Errorf("invalid value for %s: %s", key, value)
+		}
+
+		p.Timeout = time.Duration(tms) * time.Millisecond
+		p.TimeoutSet = true
 	case "tlsdisableocspendpointcheck":
 		p.SSL = true
 		p.SSLSet = true
