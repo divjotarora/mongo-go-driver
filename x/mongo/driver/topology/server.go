@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -119,6 +120,8 @@ type Server struct {
 
 	processErrorLock sync.Mutex
 	rttMonitor       *rttMonitor
+
+	id primitive.ObjectID
 }
 
 // updateTopologyCallback is a callback used to create a server that should be called when the parent Topology instance
@@ -138,6 +141,11 @@ func ConnectServer(addr address.Address, updateCallback updateTopologyCallback, 
 		return nil, err
 	}
 	return srvr, nil
+}
+
+func (s *Server) log(msg string, args ...interface{}) {
+	fullMsg := fmt.Sprintf("[%s %s] %s", s.address, s.id, msg)
+	log.Printf(fullMsg, args...)
 }
 
 // NewServer creates a new server. The mongodb server at the address will be monitored
@@ -162,7 +170,9 @@ func NewServer(addr address.Address, topologyID primitive.ObjectID, opts ...Serv
 		subscribers:     make(map[uint64]chan description.Server),
 		globalCtx:       globalCtx,
 		globalCtxCancel: globalCtxCancel,
+		id:              primitive.NewObjectID(),
 	}
+	s.log("server API is nil at construction: %v\n", s.cfg.serverAPI == nil)
 	s.desc.Store(description.NewDefaultServer(addr))
 	rttCfg := &rttConfig{
 		interval:           cfg.heartbeatInterval,
@@ -570,6 +580,7 @@ func (s *Server) updateDescription(desc description.Server) {
 // createConnection creates a new connection instance but does not call connect on it. The caller must call connect
 // before the connection can be used for network operations.
 func (s *Server) createConnection() (*connection, error) {
+	s.log("server API is nil in createConnection: %v\n", s.cfg.serverAPI == nil)
 	opts := []ConnectionOption{
 		WithConnectTimeout(func(time.Duration) time.Duration { return s.cfg.heartbeatTimeout }),
 		WithReadTimeout(func(time.Duration) time.Duration { return s.cfg.heartbeatTimeout }),
