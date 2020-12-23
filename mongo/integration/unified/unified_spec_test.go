@@ -72,7 +72,7 @@ func (t *TestCase) SetsFailPoint() bool {
 }
 
 func (t *TestCase) StartsTransaction() bool {
-	return t.performsOperation("startTransaction")
+	return t.performsOperation("startTransaction") || t.performsOperation("withTransaction")
 }
 
 func (t *TestCase) performsOperation(name string) bool {

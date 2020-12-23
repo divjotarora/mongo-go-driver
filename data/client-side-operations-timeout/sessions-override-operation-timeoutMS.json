@@ -1,5 +1,5 @@
 {
-  "description": "timeoutMS behaves correctly for session operations",
+  "description": "timeoutMS can be overridden for individual session operations",
   "schemaVersion": "1.2",
   "runOnRequirements": [
     {
@@ -20,9 +20,6 @@
     {
       "client": {
         "id": "client",
-        "uriOptions": {
-          "timeoutMS": 10
-        },
         "useMultipleMongoses": false,
         "observeEvents": [
           "commandStartedEvent",
@@ -60,87 +57,6 @@
     }
   ],
   "tests": [
-    {
-      "description": "timeoutMS applied to commitTransaction",
-      "operations": [
-        {
-          "name": "failPoint",
-          "object": "testRunner",
-          "arguments": {
-            "client": "failPointClient",
-            "failPoint": {
-              "configureFailPoint": "failCommand",
-              "mode": {
-                "times": 1
-              },
-              "data": {
-                "failCommands": [
-                  "commitTransaction"
-                ],
-                "blockConnection": true,
-                "blockTimeMS": 15
-              }
-            }
-          }
-        },
-        {
-          "name": "startTransaction",
-          "object": "session"
-        },
-        {
-          "name": "insertOne",
-          "object": "collection",
-          "arguments": {
-            "session": "session",
-            "document": {
-              "_id": 1
-            }
-          }
-        },
-        {
-          "name": "commitTransaction",
-          "object": "session",
-          "expectError": {
-            "isTimeoutError": true
-          }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll"
-                }
-              }
-            },
-            {
-              "commandSucceededEvent": {
-                "commandName": "insert"
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "commitTransaction",
-                "databaseName": "admin",
-                "command": {
-                  "commitTransaction": 1
-                }
-              }
-            },
-            {
-              "commandFailedEvent": {
-                "commandName": "commitTransaction"
-              }
-            }
-          ]
-        }
-      ]
-    },
     {
       "description": "timeoutMS can be overridden for commitTransaction",
       "operations": [
@@ -182,7 +98,10 @@
           "name": "commitTransaction",
           "object": "session",
           "arguments": {
-            "timeoutMS": 50
+            "timeoutMS": 10
+          },
+          "expectError": {
+            "isTimeoutError": true
           }
         }
       ],
@@ -209,12 +128,18 @@
                 "commandName": "commitTransaction",
                 "databaseName": "admin",
                 "command": {
-                  "commitTransaction": 1
+                  "commitTransaction": 1,
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
                 }
               }
             },
             {
-              "commandSucceededEvent": {
+              "commandFailedEvent": {
                 "commandName": "commitTransaction"
               }
             }
@@ -261,7 +186,10 @@
         },
         {
           "name": "abortTransaction",
-          "object": "session"
+          "object": "session",
+          "arguments": {
+            "timeoutMS": 10
+          }
         }
       ],
       "expectEvents": [
@@ -287,7 +215,13 @@
                 "commandName": "abortTransaction",
                 "databaseName": "admin",
                 "command": {
-                  "abortTransaction": 1
+                  "abortTransaction": 1,
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
                 }
               }
             },
@@ -301,7 +235,7 @@
       ]
     },
     {
-      "description": "timeoutMS can be overridden for abortTransaction",
+      "description": "timeoutMS applied to withTransaction",
       "operations": [
         {
           "name": "failPoint",
@@ -315,7 +249,7 @@
               },
               "data": {
                 "failCommands": [
-                  "abortTransaction"
+                  "insert"
                 ],
                 "blockConnection": true,
                 "blockTimeMS": 15
@@ -324,24 +258,28 @@
           }
         },
         {
-          "name": "startTransaction",
-          "object": "session"
-        },
-        {
-          "name": "insertOne",
-          "object": "collection",
-          "arguments": {
-            "session": "session",
-            "document": {
-              "_id": 1
-            }
-          }
-        },
-        {
-          "name": "abortTransaction",
+          "name": "withTransaction",
           "object": "session",
           "arguments": {
-            "timeoutMS": 50
+            "timeoutMS": 10,
+            "callback": [
+              {
+                "name": "insertOne",
+                "object": "collection",
+                "arguments": {
+                  "session": "session",
+                  "document": {
+                    "_id": 1
+                  }
+                },
+                "expectError": {
+                  "isTimeoutError": true
+                }
+              }
+            ]
+          },
+          "expectError": {
+            "isTimeoutError": true
           }
         }
       ],
@@ -354,27 +292,19 @@
                 "commandName": "insert",
                 "databaseName": "test",
                 "command": {
-                  "insert": "coll"
+                  "insert": "coll",
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
                 }
               }
             },
             {
-              "commandSucceededEvent": {
+              "commandFailedEvent": {
                 "commandName": "insert"
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "abortTransaction",
-                "databaseName": "admin",
-                "command": {
-                  "abortTransaction": 1
-                }
-              }
-            },
-            {
-              "commandSucceededEvent": {
-                "commandName": "abortTransaction"
               }
             }
           ]

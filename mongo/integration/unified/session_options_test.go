@@ -74,6 +74,7 @@ func (so *SessionOptions) UnmarshalBSON(data []byte) error {
 	var temp struct {
 		Causal     *bool                  `bson:"causalConsistency"`
 		TxnOptions *TransactionOptions    `bson:"defaultTransactionOptions"`
+		Timeout    *int64                 `bson:"defaultTimeoutMS"`
 		Extra      map[string]interface{} `bson:",inline"`
 	}
 	if err := bson.Unmarshal(data, &temp); err != nil {
@@ -87,17 +88,22 @@ func (so *SessionOptions) UnmarshalBSON(data []byte) error {
 	if temp.Causal != nil {
 		so.SetCausalConsistency(*temp.Causal)
 	}
-	if mct := temp.TxnOptions.MaxCommitTime; mct != nil {
-		so.SetDefaultMaxCommitTime(mct)
+	if temp.Timeout != nil {
+		so.SetDefaultTimeout(time.Duration(*temp.Timeout) * time.Millisecond)
 	}
-	if rc := temp.TxnOptions.ReadConcern; rc != nil {
-		so.SetDefaultReadConcern(rc)
-	}
-	if rp := temp.TxnOptions.ReadPreference; rp != nil {
-		so.SetDefaultReadPreference(rp)
-	}
-	if wc := temp.TxnOptions.WriteConcern; wc != nil {
-		so.SetDefaultWriteConcern(wc)
+	if temp.TxnOptions != nil {
+		if mct := temp.TxnOptions.MaxCommitTime; mct != nil {
+			so.SetDefaultMaxCommitTime(mct)
+		}
+		if rc := temp.TxnOptions.ReadConcern; rc != nil {
+			so.SetDefaultReadConcern(rc)
+		}
+		if rp := temp.TxnOptions.ReadPreference; rp != nil {
+			so.SetDefaultReadPreference(rp)
+		}
+		if wc := temp.TxnOptions.WriteConcern; wc != nil {
+			so.SetDefaultWriteConcern(wc)
+		}
 	}
 	return nil
 }

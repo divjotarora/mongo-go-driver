@@ -291,10 +291,15 @@ func (c *Client) StartSession(opts ...*options.SessionOptions) (Session, error) 
 	sess.RetryWrite = false
 	sess.RetryRead = c.retryReads
 
+	timeout := sopts.DefaultTimeout
+	if timeout == nil {
+		timeout = c.timeout
+	}
 	return &sessionImpl{
 		clientSession: sess,
 		client:        c,
 		deployment:    c.deployment,
+		timeout:       timeout,
 	}, nil
 }
 

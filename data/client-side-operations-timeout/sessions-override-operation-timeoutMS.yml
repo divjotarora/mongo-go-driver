@@ -1,4 +1,4 @@
-description: "timeoutMS behaves correctly for session operations"
+description: "timeoutMS can be overridden for individual session operations"
 
 schemaVersion: "1.2"
 
@@ -12,8 +12,6 @@ createEntities:
       useMultipleMongoses: false
   - client:
       id: &client client
-      uriOptions:
-        timeoutMS: 10
       useMultipleMongoses: false
       observeEvents:
         - commandStartedEvent
@@ -40,51 +38,6 @@ tests:
   # Drivers ignore errors from abortTransaction, so the tests in this file use commandSucceededEvent and
   # commandFailedEvent events to assert success/failure.
 
-  # Failure test for commitTransaction to assert that it inherits the client's timeoutMS.
-  - description: "timeoutMS applied to commitTransaction"
-    operations:
-      - name: failPoint
-        object: testRunner
-        arguments:
-          client: *failPointClient
-          failPoint:
-            configureFailPoint: failCommand
-            mode: { times: 1 }
-            data:
-              failCommands: ["commitTransaction"]
-              blockConnection: true
-              blockTimeMS: 15
-      - name: startTransaction
-        object: *session
-      - name: insertOne
-        object: *collection
-        arguments:
-          session: *session
-          document: { _id: 1 }
-      - name: commitTransaction
-        object: *session
-        expectError:
-          isTimeoutError: true
-    expectEvents:
-      - client: *client
-        events:
-          - commandStartedEvent:
-              commandName: insert
-              databaseName: *databaseName
-              command:
-                insert: *collectionName
-          - commandSucceededEvent:
-              commandName: insert
-          - commandStartedEvent:
-              commandName: commitTransaction
-              databaseName: admin
-              command:
-                commitTransaction: 1
-          - commandFailedEvent:
-              commandName: commitTransaction
-
-  # Success test for commitTransaction. The client timeoutMS is 10, so the test blocks the operation for 15ms and
-  # overrides the timeout to 50ms. The operation should succeed.
   - description: "timeoutMS can be overridden for commitTransaction"
     operations:
       - name: failPoint
@@ -108,7 +61,9 @@ tests:
       - name: commitTransaction
         object: *session
         arguments:
-          timeoutMS: 50 # The client timeoutMS is 10 and the operation blocks for 15ms, so 50ms should let it succeed.
+          timeoutMS: 10
+        expectError:
+          isTimeoutError: true
     expectEvents:
       - client: *client
         events:
@@ -124,10 +79,10 @@ tests:
               databaseName: admin
               command:
                 commitTransaction: 1
-          - commandSucceededEvent:
+                maxTimeMS: { $$type: ["int", "long"] }
+          - commandFailedEvent:
               commandName: commitTransaction
 
-  # Failure test for abortTransaction to assert that it inherits the client's timeoutMS.
   - description: "timeoutMS applied to abortTransaction"
     operations:
       - name: failPoint
@@ -150,6 +105,8 @@ tests:
           document: { _id: 1 }
       - name: abortTransaction
         object: *session
+        arguments:
+          timeoutMS: 10
     expectEvents:
       - client: *client
         events:
@@ -165,12 +122,11 @@ tests:
               databaseName: admin
               command:
                 abortTransaction: 1
+                maxTimeMS: { $$type: ["int", "long"] }
           - commandFailedEvent:
               commandName: abortTransaction
 
-  # Success test for commitTransaction. The client timeoutMS is 10, so the test blocks the operation for 15ms and
-  # overrides the timeout to 50ms. The operation should succeed.
-  - description: "timeoutMS can be overridden for abortTransaction"
+  - description: "timeoutMS applied to withTransaction"
     operations:
       - name: failPoint
         object: testRunner
@@ -180,34 +136,36 @@ tests:
             configureFailPoint: failCommand
             mode: { times: 1 }
             data:
-              failCommands: ["abortTransaction"]
+              failCommands: ["insert"]
               blockConnection: true
               blockTimeMS: 15
-      - name: startTransaction
-        object: *session
-      - name: insertOne
-        object: *collection
-        arguments:
-          session: *session
-          document: { _id: 1 }
-      - name: abortTransaction
+      - name: withTransaction
         object: *session
         arguments:
-          timeoutMS: 50 # The client timeoutMS is 10 and the operation blocks for 15ms, so 50ms should let it succeed.
+          timeoutMS: 10
+          callback:
+            - name: insertOne
+              object: *collection
+              arguments:
+                session: *session
+                document: { _id: 1 }
+              expectError:
+                isTimeoutError: true
+        expectError:
+          isTimeoutError: true
     expectEvents:
       - client: *client
         events:
+          # Because the insert expects an error and gets an error, it technically succeeds, so withTransaction will
+          # try to run commitTransaction. This will fail client-side, though, because the timeout has already expired,
+          # so no command is sent.
           - commandStartedEvent:
               commandName: insert
               databaseName: *databaseName
               command:
                 insert: *collectionName
-          - commandSucceededEvent:
+                # withTransaction specifies timeoutMS for each operation in the callback that uses the session, so the
+                # insert command should have a maxTimeMS field.
+                maxTimeMS: { $$type: ["int", "long"] }
+          - commandFailedEvent:
               commandName: insert
-          - commandStartedEvent:
-              commandName: abortTransaction
-              databaseName: admin
-              command:
-                abortTransaction: 1
-          - commandSucceededEvent:
-              commandName: abortTransaction

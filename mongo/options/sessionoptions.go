@@ -38,6 +38,8 @@ type SessionOptions struct {
 	// The default maximum amount of time that a CommitTransaction operation executed in the session can run on the
 	// server. The default value is nil, which means that that there is no time limit for execution.
 	DefaultMaxCommitTime *time.Duration
+
+	DefaultTimeout *time.Duration
 }
 
 // Session creates a new SessionOptions instance.
@@ -77,6 +79,11 @@ func (s *SessionOptions) SetDefaultMaxCommitTime(mct *time.Duration) *SessionOpt
 	return s
 }
 
+func (s *SessionOptions) SetDefaultTimeout(timeout time.Duration) *SessionOptions {
+	s.DefaultTimeout = &timeout
+	return s
+}
+
 // MergeSessionOptions combines the given SessionOptions instances into a single SessionOptions in a last-one-wins
 // fashion.
 func MergeSessionOptions(opts ...*SessionOptions) *SessionOptions {
@@ -99,6 +106,9 @@ func MergeSessionOptions(opts ...*SessionOptions) *SessionOptions {
 		}
 		if opt.DefaultMaxCommitTime != nil {
 			s.DefaultMaxCommitTime = opt.DefaultMaxCommitTime
+		}
+		if opt.DefaultTimeout != nil {
+			s.DefaultTimeout = opt.DefaultTimeout
 		}
 	}
 

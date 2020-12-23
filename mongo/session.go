@@ -143,6 +143,7 @@ type sessionImpl struct {
 	client              *Client
 	deployment          driver.Deployment
 	didCommitAfterStart bool // true if commit was called after start with no other operations
+	timeout             *time.Duration
 }
 
 var _ Session = &sessionImpl{}
@@ -173,7 +174,7 @@ func (s *sessionImpl) WithTransaction(ctx context.Context, fn func(sessCtx Sessi
 
 	// TODO: should we check for context Done() wherever we check the timeout channel?
 
-	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.timeout, nil, s.clientSession.CurrentMct)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +267,7 @@ func (s *sessionImpl) StartTransaction(opts ...*options.TransactionOptions) erro
 func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
 	// If this is being called from within WithTransaction and the global timeout option is set, the context will have
 	// a deadline on it already, so getOperationContext will be a no-op.
-	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.timeout, nil, s.clientSession.CurrentMct)
 	if err != nil {
 		return err
 	}
@@ -302,7 +303,7 @@ func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
 func (s *sessionImpl) CommitTransaction(ctx context.Context) error {
 	// If this is being called from within WithTransaction and the global timeout option is set, the context will have
 	// a deadline on it already, so getOperationContext will be a no-op.
-	ctx, cancel, err := getOperationContext(ctx, s.client, s.client.timeout, nil, s.clientSession.CurrentMct)
+	ctx, cancel, err := getOperationContext(ctx, s.client, s.timeout, nil, s.clientSession.CurrentMct)
 	if err != nil {
 		return err
 	}
