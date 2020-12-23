@@ -17,7 +17,6 @@ createEntities:
       useMultipleMongoses: false
       observeEvents:
         - commandStartedEvent
-        - commandFailedEvent
   - database:
       id: &database database
       client: *client
@@ -45,7 +44,7 @@ tests:
             - name: insertOne
               object: *collection
               arguments:
-                document: { x: 1 }
+                document: { _id: 1 }
                 session: *session
                 timeoutMS: 50
               expectError:
@@ -55,7 +54,7 @@ tests:
       - client: *client
         events: []
 
-  - description: "timeoutMS can be overridden for withTransaction"
+  - description: "timeoutMS is not refreshed for each operation in the callback"
     operations:
       - name: failPoint
         object: testRunner
@@ -63,32 +62,44 @@ tests:
           client: *failPointClient
           failPoint:
             configureFailPoint: failCommand
-            mode: { times: 1 }
+            mode: { times: 2 }
             data:
               failCommands: ["insert"]
               blockConnection: true
-              blockTimeMS: 25
+              blockTimeMS: 15
       - name: withTransaction
         object: *session
         arguments:
-          timeoutMS: 50 # The client timeoutMS is 20 and the operation blocks for 25ms, so 50ms should let it succeed.
           callback:
             - name: insertOne
               object: *collection
               arguments:
-                session: *session
                 document: { _id: 1 }
+                session: *session
+            - name: insertOne
+              object: *collection
+              arguments:
+                document: { _id: 2 }
+                session: *session
+              expectError:
+                isTimeoutError: true
+        expectError:
+          isTimeoutError: true
     expectEvents:
       - client: *client
         events:
+          # Because the second insert expects an error and gets an error, it technically succeeds, so withTransaction
+          # will try to run commitTransaction. This will fail client-side, though, because the timeout has already
+          # expired, so no command is sent.
           - commandStartedEvent:
               commandName: insert
               databaseName: *databaseName
               command:
                 insert: *collectionName
-                documents: [ { _id: 1 } ]
+                maxTimeMS: { $$type: ["int", "long"] }
           - commandStartedEvent:
-              commandName: commitTransaction
-              databaseName: admin
+              commandName: insert
+              databaseName: *databaseName
               command:
-                commitTransaction: 1
+                insert: *collectionName
+                maxTimeMS: { $$type: ["int", "long"] }

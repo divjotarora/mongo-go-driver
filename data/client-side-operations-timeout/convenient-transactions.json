@@ -25,8 +25,7 @@
         },
         "useMultipleMongoses": false,
         "observeEvents": [
-          "commandStartedEvent",
-          "commandFailedEvent"
+          "commandStartedEvent"
         ]
       }
     },
@@ -72,7 +71,7 @@
                 "object": "collection",
                 "arguments": {
                   "document": {
-                    "x": 1
+                    "_id": 1
                   },
                   "session": "session",
                   "timeoutMS": 50
@@ -93,7 +92,7 @@
       ]
     },
     {
-      "description": "timeoutMS can be overridden for withTransaction",
+      "description": "timeoutMS is not refreshed for each operation in the callback",
       "operations": [
         {
           "name": "failPoint",
@@ -103,14 +102,14 @@
             "failPoint": {
               "configureFailPoint": "failCommand",
               "mode": {
-                "times": 1
+                "times": 2
               },
               "data": {
                 "failCommands": [
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 15
               }
             }
           }
@@ -119,19 +118,34 @@
           "name": "withTransaction",
           "object": "session",
           "arguments": {
-            "timeoutMS": 50,
             "callback": [
               {
                 "name": "insertOne",
                 "object": "collection",
                 "arguments": {
-                  "session": "session",
                   "document": {
                     "_id": 1
-                  }
+                  },
+                  "session": "session"
+                }
+              },
+              {
+                "name": "insertOne",
+                "object": "collection",
+                "arguments": {
+                  "document": {
+                    "_id": 2
+                  },
+                  "session": "session"
+                },
+                "expectError": {
+                  "isTimeoutError": true
                 }
               }
             ]
+          },
+          "expectError": {
+            "isTimeoutError": true
           }
         }
       ],
@@ -145,20 +159,27 @@
                 "databaseName": "test",
                 "command": {
                   "insert": "coll",
-                  "documents": [
-                    {
-                      "_id": 1
-                    }
-                  ]
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
                 }
               }
             },
             {
               "commandStartedEvent": {
-                "commandName": "commitTransaction",
-                "databaseName": "admin",
+                "commandName": "insert",
+                "databaseName": "test",
                 "command": {
-                  "commitTransaction": 1
+                  "insert": "coll",
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
                 }
               }
             }
