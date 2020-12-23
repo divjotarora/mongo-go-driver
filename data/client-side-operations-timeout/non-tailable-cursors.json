@@ -55,6 +55,11 @@
           "_id": 2
         }
       ]
+    },
+    {
+      "collectionName": "aggregateOutputColl",
+      "databaseName": "test",
+      "documents": []
     }
   ],
   "tests": [
@@ -516,6 +521,82 @@
                   "cursors": {
                     "$$type": "array"
                   },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "maxTimeMS is added to aggregate with a $out stage if timeoutMode is iteration",
+      "operations": [
+        {
+          "name": "aggregate",
+          "object": "collection",
+          "arguments": {
+            "pipeline": [
+              {
+                "$out": "aggregateOutputColl"
+              }
+            ]
+          }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "aggregate",
+                "databaseName": "test",
+                "command": {
+                  "aggregate": "coll",
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "maxTimeMS is added to aggregate with a $merge stage if timeoutMode is iteration",
+      "operations": [
+        {
+          "name": "aggregate",
+          "object": "collection",
+          "arguments": {
+            "pipeline": [
+              {
+                "$merge": "aggregateOutputColl"
+              }
+            ]
+          }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "aggregate",
+                "databaseName": "test",
+                "command": {
+                  "aggregate": "coll",
                   "maxTimeMS": {
                     "$$type": [
                       "int",
