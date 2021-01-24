@@ -236,7 +236,8 @@ func evaluateSpecialComparison(ctx context.Context, assertionDoc bson.Raw, actua
 			return fmt.Errorf("expected lsid %v, got %v", expectedID, actualID)
 		}
 	case "$$lte":
-		expectedNumber, ok := assertionVal.AsInt64OK()
+		// x: { $$lte: <value> } should assert that x <= <value>
+		maxNumber, ok := assertionVal.AsInt64OK()
 		if !ok {
 			return fmt.Errorf("expected value %s is not a number", assertionVal)
 		}
@@ -245,8 +246,8 @@ func evaluateSpecialComparison(ctx context.Context, assertionDoc bson.Raw, actua
 			return fmt.Errorf("actual value %s is not a number", actual)
 		}
 
-		if expectedNumber > actualNumber {
-			return fmt.Errorf("expected actual value %d to be less than or equal to %d", actualNumber, expectedNumber)
+		if actualNumber > maxNumber {
+			return fmt.Errorf("expected actual value %d to be less than or equal to %d", actualNumber, maxNumber)
 		}
 	default:
 		return fmt.Errorf("unrecognized special matching assertion %q", assertion)

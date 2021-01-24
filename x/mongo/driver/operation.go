@@ -14,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -200,9 +201,9 @@ func (op Operation) shouldEncrypt() bool {
 }
 
 // selectServer handles performing server selection for an operation.
-func (op Operation) selectServer(ctx context.Context) (Server, error) {
+func (op Operation) selectServer(ctx context.Context) (Server, description.Server, error) {
 	if err := op.Validate(); err != nil {
-		return nil, err
+		return nil, description.Server{}, err
 	}
 
 	selector := op.Selector
@@ -217,7 +218,13 @@ func (op Operation) selectServer(ctx context.Context) (Server, error) {
 		})
 	}
 
-	return op.Deployment.SelectServer(ctx, selector)
+	if dep, ok := op.Deployment.(FullDeployment); ok {
+		return dep.SelectFullServer(ctx, selector)
+	}
+
+	server, err := op.Deployment.SelectServer(ctx, selector)
+	return server, description.Server{}, err
+	// return op.Deployment.SelectServer(ctx, selector)
 }
 
 // Validate validates this operation, ensuring the fields are set properly.
@@ -249,7 +256,7 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 		return err
 	}
 
-	srvr, err := op.selectServer(ctx)
+	srvr, serverDesc, err := op.selectServer(ctx)
 	if err != nil {
 		return err
 	}
@@ -261,6 +268,10 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 	defer conn.Close()
 
 	desc := description.SelectedServer{Server: conn.Description(), Kind: op.Deployment.Kind()}
+	desc.Server.AverageRTT = serverDesc.AverageRTT
+	desc.Server.AverageRTTSet = serverDesc.AverageRTTSet
+	desc.Server.NinetiethPercentileRTT = serverDesc.NinetiethPercentileRTT
+	desc.Server.NinetiethPercentileRTTSet = serverDesc.NinetiethPercentileRTTSet
 	scratch = scratch[:0]
 
 	if desc.WireVersion == nil || desc.WireVersion.Max < 4 {
@@ -385,10 +396,10 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 				tt.Labels = append(tt.Labels, RetryableWriteError)
 			}
 
-			if retryableForServerDesc && retryableErr && op.Retry {
+			if ctx.Err() == nil && retryableForServerDesc && retryableErr && op.Retry {
 				original, err = err, nil
 				conn.Close() // Avoid leaking the connection.
-				srvr, err = op.selectServer(ctx)
+				srvr, serverDesc, err = op.selectServer(ctx)
 				if err != nil {
 					return original
 				}
@@ -405,6 +416,13 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 					op.Client.UpdateCommitTransactionWriteConcern()
 					op.WriteConcern = op.Client.CurrentWc
 				}
+
+				desc = description.SelectedServer{Server: conn.Description(), Kind: op.Deployment.Kind()}
+				desc.Server.AverageRTT = serverDesc.AverageRTT
+				desc.Server.AverageRTTSet = serverDesc.AverageRTTSet
+				desc.Server.NinetiethPercentileRTT = serverDesc.NinetiethPercentileRTT
+				desc.Server.NinetiethPercentileRTTSet = serverDesc.NinetiethPercentileRTTSet
+
 				continue
 			}
 
@@ -477,10 +495,10 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 
 			// Socket timeouts caused by using the legacy socketTimeoutMS option can only be retried once. After the
 			// second, the error is no longer considered retryable.
-			if socketTimeoutCount < 2 && retryableForServerDesc && retryableErr && op.Retry {
+			if ctx.Err() == nil && socketTimeoutCount < 2 && retryableForServerDesc && retryableErr && op.Retry {
 				original, err = err, nil
 				conn.Close() // Avoid leaking the connection.
-				srvr, err = op.selectServer(ctx)
+				srvr, serverDesc, err = op.selectServer(ctx)
 				if err != nil {
 					return original
 				}
@@ -497,6 +515,12 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 					op.Client.UpdateCommitTransactionWriteConcern()
 					op.WriteConcern = op.Client.CurrentWc
 				}
+
+				desc = description.SelectedServer{Server: conn.Description(), Kind: op.Deployment.Kind()}
+				desc.Server.AverageRTT = serverDesc.AverageRTT
+				desc.Server.AverageRTTSet = serverDesc.AverageRTTSet
+				desc.Server.NinetiethPercentileRTT = serverDesc.NinetiethPercentileRTT
+				desc.Server.NinetiethPercentileRTTSet = serverDesc.NinetiethPercentileRTTSet
 				continue
 			}
 
@@ -716,20 +740,23 @@ func (op Operation) addBatchArray(dst []byte) []byte {
 	return dst
 }
 
-func (op Operation) addMaxTimeMS(ctx context.Context, dst []byte) []byte {
+func (op Operation) addMaxTimeMS(ctx context.Context, dst []byte, desc description.SelectedServer) ([]byte, error) {
 	if _, ok := skipMaxTimeMSCommands[op.CommandName]; ok {
-		return dst
+		return dst, nil
 	}
 
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return dst
+		return dst, nil
 	}
 
-	// TODO: account for server RTT
+	maxTimeMS := time.Until(deadline).Milliseconds() - desc.NinetiethPercentileRTT.Milliseconds()
+	if maxTimeMS <= 0 {
+		return dst, context.DeadlineExceeded
+	}
 
-	dst = bsoncore.AppendInt64Element(dst, "maxTimeMS", time.Until(deadline).Milliseconds())
-	return dst
+	dst = bsoncore.AppendInt64Element(dst, "maxTimeMS", maxTimeMS)
+	return dst, nil
 }
 
 func (op Operation) createQueryWireMessage(ctx context.Context, dst []byte, desc description.SelectedServer) ([]byte, startedInformation, error) {
@@ -760,7 +787,10 @@ func (op Operation) createQueryWireMessage(ctx context.Context, dst []byte, desc
 	if err != nil {
 		return dst, info, err
 	}
-	dst = op.addMaxTimeMS(ctx, dst)
+	dst, err = op.addMaxTimeMS(ctx, dst, desc)
+	if err != nil {
+		return dst, info, err
+	}
 
 	if op.Batches != nil && len(op.Batches.Current) > 0 {
 		dst = op.addBatchArray(dst)
@@ -771,7 +801,7 @@ func (op Operation) createQueryWireMessage(ctx context.Context, dst []byte, desc
 		return dst, info, err
 	}
 
-	dst, err = op.addWriteConcern(dst, desc)
+	dst, err = op.addWriteConcern(ctx, dst, desc)
 	if err != nil {
 		return dst, info, err
 	}
@@ -832,7 +862,7 @@ func (op Operation) createMsgWireMessage(ctx context.Context, dst []byte, desc d
 	if err != nil {
 		return dst, info, err
 	}
-	dst, err = op.addWriteConcern(dst, desc)
+	dst, err = op.addWriteConcern(ctx, dst, desc)
 	if err != nil {
 		return dst, info, err
 	}
@@ -853,7 +883,10 @@ func (op Operation) createMsgWireMessage(ctx context.Context, dst []byte, desc d
 		dst = bsoncore.AppendDocumentElement(dst, "$readPreference", rp)
 	}
 
-	dst = op.addMaxTimeMS(ctx, dst)
+	dst, err = op.addMaxTimeMS(ctx, dst, desc)
+	if err != nil {
+		return dst, info, err
+	}
 	dst, _ = bsoncore.AppendDocumentEnd(dst, idx)
 	// The command document for monitoring shouldn't include the type 1 payload as a document sequence
 	info.cmd = dst[idx:]
@@ -949,13 +982,17 @@ func (op Operation) addReadConcern(dst []byte, desc description.SelectedServer) 
 	return bsoncore.AppendDocumentElement(dst, "readConcern", data), nil
 }
 
-func (op Operation) addWriteConcern(dst []byte, desc description.SelectedServer) ([]byte, error) {
+func (op Operation) addWriteConcern(ctx context.Context, dst []byte, desc description.SelectedServer) ([]byte, error) {
 	if op.MinimumWriteConcernWireVersion > 0 && (desc.WireVersion == nil || !desc.WireVersion.Includes(op.MinimumWriteConcernWireVersion)) {
 		return dst, nil
 	}
 	wc := op.WriteConcern
 	if wc == nil {
 		return dst, nil
+	}
+
+	if internal.ContextHasDeadline(ctx) && wc.GetWTimeout() > 0 {
+		wc = wc.WithOptions(writeconcern.WTimeout(0))
 	}
 
 	t, data, err := wc.MarshalBSONValue()

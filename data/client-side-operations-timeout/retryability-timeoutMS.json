@@ -27,7 +27,7 @@
       "client": {
         "id": "client",
         "uriOptions": {
-          "timeoutMS": 20
+          "timeoutMS": 50
         },
         "useMultipleMongoses": false,
         "observeEvents": [
@@ -84,7 +84,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -104,43 +104,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -337,7 +300,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -359,43 +322,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -596,7 +522,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -614,43 +540,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "delete",
-                "databaseName": "test",
-                "command": {
-                  "delete": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "delete",
-                "databaseName": "test",
-                "command": {
-                  "delete": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -843,7 +732,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -864,43 +753,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "update",
-                "databaseName": "test",
-                "command": {
-                  "update": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "update",
-                "databaseName": "test",
-                "command": {
-                  "update": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -1099,7 +951,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -1122,43 +974,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "update",
-                "databaseName": "test",
-                "command": {
-                  "update": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "update",
-                "databaseName": "test",
-                "command": {
-                  "update": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -1361,7 +1176,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -1379,43 +1194,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -1608,7 +1386,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -1629,43 +1407,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -1864,7 +1605,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -1887,43 +1628,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "findAndModify",
-                "databaseName": "test",
-                "command": {
-                  "findAndModify": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -2126,7 +1830,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -2152,43 +1856,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -2397,7 +2064,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -2415,43 +2082,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listDatabases",
-                "databaseName": "admin",
-                "command": {
-                  "listDatabases": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listDatabases",
-                "databaseName": "admin",
-                "command": {
-                  "listDatabases": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -2644,7 +2274,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -2662,43 +2292,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listDatabases",
-                "databaseName": "admin",
-                "command": {
-                  "listDatabases": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listDatabases",
-                "databaseName": "admin",
-                "command": {
-                  "listDatabases": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -2891,7 +2484,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -2909,43 +2502,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "admin",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "admin",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -3138,7 +2694,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -3163,43 +2719,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -3406,7 +2925,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -3424,43 +2943,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listCollections",
-                "databaseName": "test",
-                "command": {
-                  "listCollections": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listCollections",
-                "databaseName": "test",
-                "command": {
-                  "listCollections": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -3653,7 +3135,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -3671,43 +3153,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listCollections",
-                "databaseName": "test",
-                "command": {
-                  "listCollections": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listCollections",
-                "databaseName": "test",
-                "command": {
-                  "listCollections": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -3900,7 +3345,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -3918,43 +3363,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": 1,
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -4147,7 +3555,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -4165,43 +3573,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -4394,7 +3765,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -4412,43 +3783,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "count",
-                "databaseName": "test",
-                "command": {
-                  "count": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "count",
-                "databaseName": "test",
-                "command": {
-                  "count": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -4641,7 +3975,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -4659,43 +3993,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -4888,7 +4185,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -4903,43 +4200,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "count",
-                "databaseName": "test",
-                "command": {
-                  "count": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "count",
-                "databaseName": "test",
-                "command": {
-                  "count": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -5128,7 +4388,7 @@
                   "distinct"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -5147,43 +4407,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "distinct",
-                "databaseName": "test",
-                "command": {
-                  "distinct": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "distinct",
-                "databaseName": "test",
-                "command": {
-                  "distinct": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -5378,7 +4601,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -5396,43 +4619,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -5625,7 +4811,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -5643,43 +4829,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -5872,7 +5021,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -5887,43 +5036,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -6112,7 +5224,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15,
+                "blockTimeMS": 30,
                 "errorCode": 7,
                 "errorLabels": [
                   "RetryableWriteError"
@@ -6130,43 +5242,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "aggregate",
-                "databaseName": "test",
-                "command": {
-                  "aggregate": "coll",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },

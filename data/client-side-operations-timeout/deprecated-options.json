@@ -3,7 +3,11 @@
   "schemaVersion": "1.2",
   "runOnRequirements": [
     {
-      "minServerVersion": "4.2"
+      "minServerVersion": "4.2",
+      "topologies": [
+        "replicaset",
+        "sharded-replicaset"
+      ]
     }
   ],
   "createEntities": [
@@ -34,9 +38,15 @@
                 "client": {
                   "id": "client",
                   "uriOptions": {
-                    "socketTimeoutMS": 1
+                    "socketTimeoutMS": 20
                   },
-                  "useMultipleMongoses": false
+                  "useMultipleMongoses": false,
+                  "observeEvents": [
+                    "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "aggregate"
+                  ]
                 }
               },
               {
@@ -87,12 +97,10 @@
           "object": "session"
         },
         {
-          "name": "insertOne",
+          "name": "countDocuments",
           "object": "collection",
           "arguments": {
-            "document": {
-              "_id": 1
-            },
+            "filter": {},
             "session": "session"
           }
         },
@@ -102,6 +110,31 @@
           "arguments": {
             "timeoutMS": 10000
           }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "commitTransaction",
+                "databaseName": "admin",
+                "command": {
+                  "commitTransaction": 1,
+                  "writeConcern": {
+                    "$$exists": false
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -123,7 +156,7 @@
                     "commandStartedEvent"
                   ],
                   "ignoreCommandMonitoringEvents": [
-                    "insert"
+                    "aggregate"
                   ]
                 }
               },
@@ -155,12 +188,10 @@
           "object": "session"
         },
         {
-          "name": "insertOne",
+          "name": "countDocuments",
           "object": "collection",
           "arguments": {
-            "document": {
-              "_id": 1
-            },
+            "filter": {},
             "session": "session"
           }
         },
@@ -214,7 +245,7 @@
                     "commandStartedEvent"
                   ],
                   "ignoreCommandMonitoringEvents": [
-                    "insert"
+                    "aggregate"
                   ]
                 }
               },
@@ -238,7 +269,7 @@
                   "client": "client",
                   "sessionOptions": {
                     "defaultTransactionOptions": {
-                      "maxCommitTimeMS": 1
+                      "maxCommitTimeMS": 5000
                     }
                   }
                 }
@@ -247,38 +278,14 @@
           }
         },
         {
-          "name": "failPoint",
-          "object": "testRunner",
-          "arguments": {
-            "client": "failPointClient",
-            "arguments": {
-              "failPoint": {
-                "configureFailPoint": "failCommand",
-                "mode": {
-                  "times": 1
-                },
-                "data": {
-                  "failCommands": [
-                    "commitTransaction"
-                  ],
-                  "blockConnection": true,
-                  "blockTimeMS": 5
-                }
-              }
-            }
-          }
-        },
-        {
           "name": "startTransaction",
           "object": "session"
         },
         {
-          "name": "insertOne",
+          "name": "countDocuments",
           "object": "collection",
           "arguments": {
-            "document": {
-              "_id": 1
-            },
+            "filter": {},
             "session": "session"
           }
         },
@@ -286,7 +293,7 @@
           "name": "commitTransaction",
           "object": "session",
           "arguments": {
-            "timeoutMS": 10000
+            "timeoutMS": 1000
           }
         }
       ],
@@ -301,10 +308,7 @@
                 "command": {
                   "commitTransaction": 1,
                   "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
+                    "$$lte": 1000
                   }
                 }
               }
@@ -325,9 +329,15 @@
                 "client": {
                   "id": "client",
                   "uriOptions": {
-                    "socketTimeoutMS": 1
+                    "socketTimeoutMS": 20
                   },
-                  "useMultipleMongoses": false
+                  "useMultipleMongoses": false,
+                  "observeEvents": [
+                    "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "aggregate"
+                  ]
                 }
               },
               {
@@ -378,12 +388,10 @@
           "object": "session"
         },
         {
-          "name": "insertOne",
+          "name": "countDocuments",
           "object": "collection",
           "arguments": {
-            "document": {
-              "_id": 1
-            },
+            "filter": {},
             "session": "session"
           }
         },
@@ -393,6 +401,31 @@
           "arguments": {
             "timeoutMS": 10000
           }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "abortTransaction",
+                "databaseName": "admin",
+                "command": {
+                  "abortTransaction": 1,
+                  "writeConcern": {
+                    "$$exists": false
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -414,7 +447,7 @@
                     "commandStartedEvent"
                   ],
                   "ignoreCommandMonitoringEvents": [
-                    "insert"
+                    "aggregate"
                   ]
                 }
               },
@@ -446,12 +479,10 @@
           "object": "session"
         },
         {
-          "name": "insertOne",
+          "name": "countDocuments",
           "object": "collection",
           "arguments": {
-            "document": {
-              "_id": 1
-            },
+            "filter": {},
             "session": "session"
           }
         },
@@ -469,10 +500,10 @@
           "events": [
             {
               "commandStartedEvent": {
-                "commandName": "commitTransaction",
+                "commandName": "abortTransaction",
                 "databaseName": "admin",
                 "command": {
-                  "commitTransaction": 1,
+                  "abortTransaction": 1,
                   "writeConcern": {
                     "$$exists": false
                   },
@@ -501,9 +532,12 @@
                 "client": {
                   "id": "client",
                   "uriOptions": {
-                    "socketTimeoutMS": 1
+                    "socketTimeoutMS": 20
                   },
-                  "useMultipleMongoses": false
+                  "useMultipleMongoses": false,
+                  "observeEvents": [
+                    "commandStartedEvent"
+                  ]
                 }
               },
               {
@@ -556,17 +590,55 @@
             "timeoutMS": 10000,
             "callback": [
               {
-                "name": "insertOne",
+                "name": "countDocuments",
                 "object": "collection",
                 "arguments": {
-                  "document": {
-                    "_id": 1
-                  },
+                  "filter": {},
                   "session": "session"
                 }
               }
             ]
           }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
+            {
+              "commandStartedEvent": {
+                "commandName": "aggregate",
+                "databaseName": "test",
+                "command": {
+                  "aggregate": "coll",
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "commandStartedEvent": {
+                "commandName": "commitTransaction",
+                "databaseName": "admin",
+                "command": {
+                  "commitTransaction": 1,
+                  "writeConcern": {
+                    "$$exists": false
+                  },
+                  "maxTimeMS": {
+                    "$$type": [
+                      "int",
+                      "long"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -619,12 +691,10 @@
             "timeoutMS": 10000,
             "callback": [
               {
-                "name": "insertOne",
+                "name": "countDocuments",
                 "object": "collection",
                 "arguments": {
-                  "document": {
-                    "_id": 1
-                  },
+                  "filter": {},
                   "session": "session"
                 }
               }
@@ -638,10 +708,10 @@
           "events": [
             {
               "commandStartedEvent": {
-                "commandName": "insert",
+                "commandName": "aggregate",
                 "databaseName": "test",
                 "command": {
-                  "insert": "coll",
+                  "aggregate": "coll",
                   "writeConcern": {
                     "$$exists": false
                   },
@@ -690,9 +760,6 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
-                  ],
-                  "ignoreCommandMonitoringEvents": [
-                    "insert"
                   ]
                 }
               },
@@ -716,7 +783,7 @@
                   "client": "client",
                   "sessionOptions": {
                     "defaultTransactionOptions": {
-                      "maxCommitTimeMS": 1
+                      "maxCommitTimeMS": 5000
                     }
                   }
                 }
@@ -725,40 +792,16 @@
           }
         },
         {
-          "name": "failPoint",
-          "object": "testRunner",
-          "arguments": {
-            "client": "failPointClient",
-            "arguments": {
-              "failPoint": {
-                "configureFailPoint": "failCommand",
-                "mode": {
-                  "times": 1
-                },
-                "data": {
-                  "failCommands": [
-                    "commitTransaction"
-                  ],
-                  "blockConnection": true,
-                  "blockTimeMS": 5
-                }
-              }
-            }
-          }
-        },
-        {
           "name": "withTransaction",
           "object": "session",
           "arguments": {
-            "timeoutMS": 10000,
+            "timeoutMS": 1000,
             "callback": [
               {
-                "name": "insertOne",
+                "name": "countDocuments",
                 "object": "collection",
                 "arguments": {
-                  "document": {
-                    "_id": 1
-                  },
+                  "filter": {},
                   "session": "session"
                 }
               }
@@ -772,15 +815,30 @@
           "events": [
             {
               "commandStartedEvent": {
-                "commandName": "commitTransaction",
-                "databaseName": "admin",
+                "commandName": "aggregate",
+                "databaseName": "test",
                 "command": {
-                  "commitTransaction": 1,
+                  "aggregate": "coll",
+                  "writeConcern": {
+                    "$$exists": false
+                  },
                   "maxTimeMS": {
                     "$$type": [
                       "int",
                       "long"
                     ]
+                  }
+                }
+              }
+            },
+            {
+              "commandStartedEvent": {
+                "commandName": "commitTransaction",
+                "databaseName": "admin",
+                "command": {
+                  "commitTransaction": 1,
+                  "maxTimeMS": {
+                    "$$lte": 1000
                   }
                 }
               }
@@ -881,6 +939,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1040,6 +1101,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1199,6 +1263,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1365,6 +1432,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1453,6 +1523,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1489,8 +1562,8 @@
           "name": "aggregate",
           "object": "database",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "pipeline": [
               {
                 "$listLocalSessions": {}
@@ -1513,7 +1586,7 @@
                 "command": {
                   "aggregate": 1,
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -1614,6 +1687,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1773,6 +1849,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -1934,6 +2013,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2095,6 +2177,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2254,6 +2339,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2335,6 +2423,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2371,8 +2462,8 @@
           "name": "aggregate",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "pipeline": []
           }
         }
@@ -2388,7 +2479,7 @@
                 "command": {
                   "aggregate": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -2489,6 +2580,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2570,6 +2664,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2606,8 +2703,8 @@
           "name": "count",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {}
           }
         }
@@ -2623,7 +2720,7 @@
                 "command": {
                   "count": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -2724,6 +2821,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2882,6 +2982,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2962,6 +3065,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -2998,8 +3104,8 @@
           "name": "estimatedDocumentCount",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000
           }
         }
       ],
@@ -3014,7 +3120,7 @@
                 "command": {
                   "count": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -3116,6 +3222,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3198,6 +3307,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3234,8 +3346,8 @@
           "name": "distinct",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "fieldName": "x",
             "filter": {}
           }
@@ -3252,7 +3364,7 @@
                 "command": {
                   "distinct": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -3353,6 +3465,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3434,6 +3549,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3470,8 +3588,8 @@
           "name": "find",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {}
           }
         }
@@ -3487,7 +3605,7 @@
                 "command": {
                   "find": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -3588,6 +3706,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3669,6 +3790,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3705,8 +3829,8 @@
           "name": "findOne",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {}
           }
         }
@@ -3722,7 +3846,7 @@
                 "command": {
                   "find": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -3822,6 +3946,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -3979,6 +4106,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4137,6 +4267,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4298,6 +4431,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4463,6 +4599,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4626,6 +4765,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4785,6 +4927,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -4947,6 +5092,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5114,6 +5262,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5283,6 +5434,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5447,6 +5601,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5528,6 +5685,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5564,8 +5724,8 @@
           "name": "findOneAndDelete",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {}
           }
         }
@@ -5581,7 +5741,7 @@
                 "command": {
                   "findAndModify": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -5685,6 +5845,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5769,6 +5932,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -5805,8 +5971,8 @@
           "name": "findOneAndReplace",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {},
             "replacement": {
               "x": 1
@@ -5825,7 +5991,7 @@
                 "command": {
                   "findAndModify": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -5931,6 +6097,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6017,6 +6186,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6053,8 +6225,8 @@
           "name": "findOneAndUpdate",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "filter": {},
             "update": {
               "$set": {
@@ -6075,7 +6247,7 @@
                 "command": {
                   "findAndModify": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -6184,6 +6356,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6354,6 +6529,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6438,6 +6616,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6474,8 +6655,8 @@
           "name": "createIndex",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "keys": {
               "x": 1
             },
@@ -6494,7 +6675,7 @@
                 "command": {
                   "createIndexes": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -6575,6 +6756,10 @@
           "arguments": {
             "timeoutMS": 100000,
             "name": "x_1"
+          },
+          "expectError": {
+            "isClientError": false,
+            "isTimeoutError": false
           }
         }
       ]
@@ -6595,6 +6780,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6633,6 +6821,10 @@
           "arguments": {
             "timeoutMS": 100000,
             "name": "x_1"
+          },
+          "expectError": {
+            "isClientError": false,
+            "isTimeoutError": false
           }
         }
       ],
@@ -6676,6 +6868,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6712,9 +6907,13 @@
           "name": "dropIndex",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500,
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000,
             "name": "x_1"
+          },
+          "expectError": {
+            "isClientError": false,
+            "isTimeoutError": false
           }
         }
       ],
@@ -6729,7 +6928,7 @@
                 "command": {
                   "dropIndexes": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }
@@ -6829,6 +7028,9 @@
                   },
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6909,6 +7111,9 @@
                   "useMultipleMongoses": false,
                   "observeEvents": [
                     "commandStartedEvent"
+                  ],
+                  "ignoreCommandMonitoringEvents": [
+                    "killCursors"
                   ]
                 }
               },
@@ -6945,8 +7150,8 @@
           "name": "dropIndexes",
           "object": "collection",
           "arguments": {
-            "timeoutMS": 100,
-            "maxTimeMS": 500
+            "timeoutMS": 1000,
+            "maxTimeMS": 5000
           }
         }
       ],
@@ -6961,7 +7166,7 @@
                 "command": {
                   "dropIndexes": "coll",
                   "maxTimeMS": {
-                    "$lte": 1
+                    "$$lte": 1000
                   }
                 }
               }

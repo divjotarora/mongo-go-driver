@@ -333,7 +333,7 @@ func (s *sessionImpl) CommitTransaction(ctx context.Context) error {
 		Session(s.clientSession).ClusterClock(s.client.clock).Database("admin").Deployment(s.deployment).
 		WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).Retry(true).
 		CommandMonitor(s.client.monitor).RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken))
-	if s.clientSession.CurrentMct != nil {
+	if !internal.ContextHasDeadline(ctx) && s.clientSession.CurrentMct != nil {
 		op.MaxTimeMS(int64(*s.clientSession.CurrentMct / time.Millisecond))
 	}
 

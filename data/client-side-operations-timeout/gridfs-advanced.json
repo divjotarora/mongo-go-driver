@@ -332,43 +332,6 @@
             "isTimeoutError": true
           }
         }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "drop",
-                "databaseName": "test",
-                "command": {
-                  "drop": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "drop",
-                "databaseName": "test",
-                "command": {
-                  "drop": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
       ]
     },
     {
@@ -400,43 +363,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "drop",
-                "databaseName": "test",
-                "command": {
-                  "drop": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "drop",
-                "databaseName": "test",
-                "command": {
-                  "drop": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     }

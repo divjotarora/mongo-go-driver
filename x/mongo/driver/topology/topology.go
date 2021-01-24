@@ -312,10 +312,27 @@ func (t *Topology) RequestImmediateCheck() {
 	t.serversLock.Unlock()
 }
 
+func (t *Topology) SelectFullServer(ctx context.Context, ss description.ServerSelector) (driver.Server, description.Server, error) {
+	server, err := t.selectServer(ctx, ss)
+	if err != nil {
+		return server, emptyDescription, err
+	}
+
+	return server, server.Server.Description(), nil
+}
+
+func (t *Topology) SelectServer(ctx context.Context, ss description.ServerSelector) (driver.Server, error) {
+	srvr, err := t.selectServer(ctx, ss)
+	if err != nil {
+		return nil, err
+	}
+	return srvr, nil
+}
+
 // SelectServer selects a server with given a selector. SelectServer complies with the
 // server selection spec, and will time out after severSelectionTimeout or when the
 // parent context is done.
-func (t *Topology) SelectServer(ctx context.Context, ss description.ServerSelector) (driver.Server, error) {
+func (t *Topology) selectServer(ctx context.Context, ss description.ServerSelector) (*SelectedServer, error) {
 	if atomic.LoadInt32(&t.connectionstate) != connected {
 		return nil, ErrTopologyClosed
 	}

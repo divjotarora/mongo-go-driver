@@ -29,31 +29,33 @@ type SelectedServer struct {
 type Server struct {
 	Addr address.Address
 
-	Arbiters              []string
-	AverageRTT            time.Duration
-	AverageRTTSet         bool
-	Compression           []string // compression methods returned by server
-	CanonicalAddr         address.Address
-	ElectionID            primitive.ObjectID
-	HeartbeatInterval     time.Duration
-	Hosts                 []string
-	LastError             error
-	LastUpdateTime        time.Time
-	LastWriteTime         time.Time
-	MaxBatchCount         uint32
-	MaxDocumentSize       uint32
-	MaxMessageSize        uint32
-	Members               []address.Address
-	Passives              []string
-	Primary               address.Address
-	ReadOnly              bool
-	SessionTimeoutMinutes uint32
-	SetName               string
-	SetVersion            uint32
-	Tags                  tag.Set
-	TopologyVersion       *TopologyVersion
-	Kind                  ServerKind
-	WireVersion           *VersionRange
+	Arbiters                  []string
+	AverageRTT                time.Duration
+	AverageRTTSet             bool
+	NinetiethPercentileRTT    time.Duration
+	NinetiethPercentileRTTSet bool
+	Compression               []string // compression methods returned by server
+	CanonicalAddr             address.Address
+	ElectionID                primitive.ObjectID
+	HeartbeatInterval         time.Duration
+	Hosts                     []string
+	LastError                 error
+	LastUpdateTime            time.Time
+	LastWriteTime             time.Time
+	MaxBatchCount             uint32
+	MaxDocumentSize           uint32
+	MaxMessageSize            uint32
+	Members                   []address.Address
+	Passives                  []string
+	Primary                   address.Address
+	ReadOnly                  bool
+	SessionTimeoutMinutes     uint32
+	SetName                   string
+	SetVersion                uint32
+	Tags                      tag.Set
+	TopologyVersion           *TopologyVersion
+	Kind                      ServerKind
+	WireVersion               *VersionRange
 }
 
 // NewServer creates a new server description from the given isMaster command response.
@@ -316,6 +318,12 @@ func NewServerFromError(addr address.Address, err error, tv *TopologyVersion) Se
 func (s Server) SetAverageRTT(rtt time.Duration) Server {
 	s.AverageRTT = rtt
 	s.AverageRTTSet = true
+	return s
+}
+
+func (s Server) SetNinetiethPercentileRTT(rtt time.Duration) Server {
+	s.NinetiethPercentileRTT = rtt
+	s.NinetiethPercentileRTTSet = true
 	return s
 }
 

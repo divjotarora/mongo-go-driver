@@ -3,7 +3,11 @@
   "schemaVersion": "1.2",
   "runOnRequirements": [
     {
-      "minServerVersion": "4.4"
+      "minServerVersion": "4.4",
+      "topologies": [
+        "replicaset",
+        "sharded-replicaset"
+      ]
     }
   ],
   "createEntities": [

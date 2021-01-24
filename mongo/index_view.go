@@ -16,6 +16,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/internal"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -106,7 +107,7 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 		op = op.BatchSize(*lio.BatchSize)
 		cursorOpts.BatchSize = *lio.BatchSize
 	}
-	if lio.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && lio.MaxTime != nil {
 		op = op.MaxTimeMS(int64(*lio.MaxTime / time.Millisecond))
 	}
 	op.Retry(iv.coll.client.retryReads)
@@ -263,7 +264,7 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 		Database(iv.coll.db.name).Collection(iv.coll.name).CommandMonitor(iv.coll.client.monitor).
 		Deployment(iv.coll.client.deployment).ServerSelector(selector)
 
-	if option.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && option.MaxTime != nil {
 		op.MaxTimeMS(int64(*option.MaxTime / time.Millisecond))
 	}
 	if option.CommitQuorum != nil {
@@ -407,7 +408,7 @@ func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.Drop
 		ServerSelector(selector).ClusterClock(iv.coll.client.clock).
 		Database(iv.coll.db.name).Collection(iv.coll.name).
 		Deployment(iv.coll.client.deployment)
-	if dio.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && dio.MaxTime != nil {
 		op.MaxTimeMS(int64(*dio.MaxTime / time.Millisecond))
 	}
 

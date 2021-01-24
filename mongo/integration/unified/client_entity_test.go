@@ -206,6 +206,8 @@ func setClientOptionsFromURIOptions(clientOpts *options.ClientOptions, uriOpts b
 
 	for key, value := range uriOpts {
 		switch key {
+		case "appName":
+			clientOpts.SetAppName(value.(string))
 		case "connectTimeoutMS":
 			clientOpts.SetConnectTimeout(time.Duration(value.(int32)) * time.Millisecond)
 		case "heartbeatFrequencyMS":

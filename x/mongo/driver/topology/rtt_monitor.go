@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/influxdata/tdigest"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/operation"
 )
@@ -30,6 +31,7 @@ type rttMonitor struct {
 	conn          *connection
 	averageRTT    time.Duration
 	averageRTTSet bool
+	rttDigest     *tdigest.TDigest
 	closeWg       sync.WaitGroup
 	cfg           *rttConfig
 	ctx           context.Context
@@ -39,9 +41,10 @@ type rttMonitor struct {
 func newRttMonitor(cfg *rttConfig) *rttMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &rttMonitor{
-		cfg:      cfg,
-		ctx:      ctx,
-		cancelFn: cancel,
+		cfg:       cfg,
+		ctx:       ctx,
+		cancelFn:  cancel,
+		rttDigest: tdigest.New(),
 	}
 }
 
@@ -93,14 +96,15 @@ func (r *rttMonitor) start() {
 	}
 }
 
-// reset sets the average RTT to 0. This should only be called from the server monitor when an error occurs during a
-// server check. Errors in the RTT monitor should not reset the average RTT.
+// reset sets the average and 90th percentile RTTs to 0. This should only be called from the server monitor when an
+// error occurs during a server check. Errors in the RTT monitor should not call this function.
 func (r *rttMonitor) reset() {
 	r.Lock()
 	defer r.Unlock()
 
 	r.averageRTT = 0
 	r.averageRTTSet = false
+	r.rttDigest.Reset()
 }
 
 func (r *rttMonitor) setupRttConnection() error {
@@ -148,6 +152,7 @@ func (r *rttMonitor) addSample(rtt time.Duration) {
 	r.Lock()
 	defer r.Unlock()
 
+	r.rttDigest.Add(float64(rtt), 1)
 	if !r.averageRTTSet {
 		r.averageRTT = rtt
 		r.averageRTTSet = true
@@ -157,9 +162,17 @@ func (r *rttMonitor) addSample(rtt time.Duration) {
 	r.averageRTT = time.Duration(rttAlphaValue*float64(rtt) + (1-rttAlphaValue)*float64(r.averageRTT))
 }
 
-func (r *rttMonitor) getRTT() time.Duration {
+type rttResult struct {
+	average             time.Duration
+	ninetiethPercentile time.Duration
+}
+
+func (r *rttMonitor) getRTT() rttResult {
 	r.Lock()
 	defer r.Unlock()
 
-	return r.averageRTT
+	return rttResult{
+		average:             r.averageRTT,
+		ninetiethPercentile: time.Duration(r.rttDigest.Quantile(0.9)),
+	}
 }

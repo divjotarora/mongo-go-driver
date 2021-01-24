@@ -32,6 +32,12 @@ func NewBackgroundContext(ctx context.Context) context.Context {
 	}
 }
 
+var timeoutMSCtxKey struct{}
+
+func WrapTimeoutMSContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, timeoutMSCtxKey, true)
+}
+
 func NewContextWithTimeout(valuesCtx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	wrapped := &backgroundContext{
@@ -44,4 +50,9 @@ func NewContextWithTimeout(valuesCtx context.Context, timeout time.Duration) (co
 
 func (b *backgroundContext) Value(key interface{}) interface{} {
 	return b.childValuesCtx.Value(key)
+}
+
+// TODO: change name
+func ContextHasDeadline(ctx context.Context) bool {
+	return ctx.Value(timeoutMSCtxKey) != nil
 }

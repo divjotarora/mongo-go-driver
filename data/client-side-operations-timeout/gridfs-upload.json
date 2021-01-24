@@ -19,10 +19,7 @@
         "uriOptions": {
           "timeoutMS": 20
         },
-        "useMultipleMongoses": false,
-        "observeEvents": [
-          "commandStartedEvent"
-        ]
+        "useMultipleMongoses": false
       }
     },
     {
@@ -138,28 +135,6 @@
             "isTimeoutError": true
           }
         }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
       ]
     },
     {
@@ -197,31 +172,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -261,32 +211,6 @@
             "isTimeoutError": true
           }
         }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find",
-            "listIndexes"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "createIndexes",
-                "databaseName": "test",
-                "command": {
-                  "createIndexes": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
       ]
     },
     {
@@ -324,47 +248,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find",
-            "createIndexes"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -404,47 +287,6 @@
             "isTimeoutError": true
           }
         }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find",
-            "listIndexes"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "createIndexes",
-                "databaseName": "test",
-                "command": {
-                  "createIndexes": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "createIndexes",
-                "databaseName": "test",
-                "command": {
-                  "createIndexes": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
       ]
     },
     {
@@ -482,33 +324,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find",
-            "listIndexes",
-            "createIndexes"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     },
@@ -548,48 +363,6 @@
             "isTimeoutError": true
           }
         }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "ignoreCommandMonitoringEvents": [
-            "find",
-            "listIndexes",
-            "createIndexes"
-          ],
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "fs.chunks",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "insert",
-                "databaseName": "test",
-                "command": {
-                  "insert": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
-        }
       ]
     },
     {
@@ -628,43 +401,6 @@
           "expectError": {
             "isTimeoutError": true
           }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": [
-            {
-              "commandStartedEvent": {
-                "commandName": "find",
-                "databaseName": "test",
-                "command": {
-                  "find": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "listIndexes",
-                "databaseName": "test",
-                "command": {
-                  "listIndexes": "fs.files",
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
-            }
-          ]
         }
       ]
     }

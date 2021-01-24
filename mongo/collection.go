@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/internal"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
@@ -817,7 +818,7 @@ func aggregate(a aggregateParams) (*Cursor, error) {
 	if ao.Collation != nil {
 		op.Collation(bsoncore.Document(ao.Collation.ToDocument()))
 	}
-	if ao.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && ao.MaxTime != nil {
 		op.MaxTimeMS(int64(*ao.MaxTime / time.Millisecond))
 	}
 	if ao.MaxAwaitTime != nil {
@@ -904,7 +905,7 @@ func (coll *Collection) CountDocuments(ctx context.Context, filter interface{},
 	if countOpts.Collation != nil {
 		op.Collation(bsoncore.Document(countOpts.Collation.ToDocument()))
 	}
-	if countOpts.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && countOpts.MaxTime != nil {
 		op.MaxTimeMS(int64(*countOpts.MaxTime / time.Millisecond))
 	}
 	if countOpts.Hint != nil {
@@ -984,7 +985,7 @@ func (coll *Collection) EstimatedDocumentCount(ctx context.Context,
 		Deployment(coll.client.deployment).ReadConcern(rc).ReadPreference(coll.readPreference).
 		ServerSelector(selector).Crypt(coll.client.crypt)
 
-	if co.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && co.MaxTime != nil {
 		op = op.MaxTimeMS(int64(*co.MaxTime / time.Millisecond))
 	}
 	op.Retry(coll.client.retryReads)
@@ -1051,7 +1052,7 @@ func (coll *Collection) Distinct(ctx context.Context, fieldName string, filter i
 	if option.Collation != nil {
 		op.Collation(bsoncore.Document(option.Collation.ToDocument()))
 	}
-	if option.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && option.MaxTime != nil {
 		op.MaxTimeMS(int64(*option.MaxTime / time.Millisecond))
 	}
 	op = op.Retry(coll.client.retryReads)
@@ -1198,7 +1199,7 @@ func (coll *Collection) Find(ctx context.Context, filter interface{},
 	if fo.MaxAwaitTime != nil {
 		cursorOpts.MaxTimeMS = int64(*fo.MaxAwaitTime / time.Millisecond)
 	}
-	if fo.MaxTime != nil {
+	if !internal.ContextHasDeadline(ctx) && fo.MaxTime != nil {
 		op.MaxTimeMS(int64(*fo.MaxTime / time.Millisecond))
 	}
 	if fo.Min != nil {
@@ -1327,6 +1328,9 @@ func (coll *Collection) findAndModify(ctx context.Context, op *operation.FindAnd
 	if cancel != nil {
 		defer cancel()
 	}
+	if !internal.ContextHasDeadline(ctx) && maxTime != nil {
+		op = op.MaxTimeMS(int64(*maxTime / time.Millisecond))
+	}
 
 	sess := sessionFromContext(ctx)
 	if sess == nil && coll.client.sessionPool != nil {
@@ -1394,9 +1398,6 @@ func (coll *Collection) FindOneAndDelete(ctx context.Context, filter interface{}
 	if fod.Collation != nil {
 		op = op.Collation(bsoncore.Document(fod.Collation.ToDocument()))
 	}
-	if fod.MaxTime != nil {
-		op = op.MaxTimeMS(int64(*fod.MaxTime / time.Millisecond))
-	}
 	if fod.Projection != nil {
 		proj, err := transformBsoncoreDocument(coll.registry, fod.Projection)
 		if err != nil {
@@ -1458,9 +1459,6 @@ func (coll *Collection) FindOneAndReplace(ctx context.Context, filter interface{
 	}
 	if fo.Collation != nil {
 		op = op.Collation(bsoncore.Document(fo.Collation.ToDocument()))
-	}
-	if fo.MaxTime != nil {
-		op = op.MaxTimeMS(int64(*fo.MaxTime / time.Millisecond))
 	}
 	if fo.Projection != nil {
 		proj, err := transformBsoncoreDocument(coll.registry, fo.Projection)
@@ -1541,9 +1539,6 @@ func (coll *Collection) FindOneAndUpdate(ctx context.Context, filter interface{}
 	}
 	if fo.Collation != nil {
 		op = op.Collation(bsoncore.Document(fo.Collation.ToDocument()))
-	}
-	if fo.MaxTime != nil {
-		op = op.MaxTimeMS(int64(*fo.MaxTime / time.Millisecond))
 	}
 	if fo.Projection != nil {
 		proj, err := transformBsoncoreDocument(coll.registry, fo.Projection)

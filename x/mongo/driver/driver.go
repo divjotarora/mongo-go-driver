@@ -14,6 +14,11 @@ type Deployment interface {
 	Kind() description.TopologyKind
 }
 
+type FullDeployment interface {
+	SelectFullServer(context.Context, description.ServerSelector) (Server, description.Server, error)
+	Kind() description.TopologyKind
+}
+
 // Connector represents a type that can connect to a server.
 type Connector interface {
 	Connect() error

@@ -273,14 +273,14 @@ func transformNetworkError(ctx context.Context, originalError error) error {
 }
 
 func getSocketDeadline(ctx context.Context, timeout time.Duration) time.Time {
-	// socketTimeoutMS and context deadlines can't be used together, so we can use whichever one is set without having
-	// to compare them to calculate the minimum.
+	// If the context deadline is set, it acts as an override because it represents the timeoutMS option. If not, we
+	// fallback to using socketTimeoutMS.
 
-	if timeout != 0 {
-		return time.Now().Add(timeout)
-	}
 	if dl, ok := ctx.Deadline(); ok {
 		return dl
+	}
+	if timeout != 0 {
+		return time.Now().Add(timeout)
 	}
 	return emptyTime
 }

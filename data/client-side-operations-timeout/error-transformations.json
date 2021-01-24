@@ -1,12 +1,18 @@
 {
-  "description": "timeoutMS behaves correctly for the withTransaction API",
+  "description": "MaxTimeMSExpired server errors are transformed into a custom timeout error",
   "schemaVersion": "1.2",
   "runOnRequirements": [
     {
-      "minServerVersion": "4.4",
+      "minServerVersion": "4.0",
+      "topologies": [
+        "replicaset"
+      ]
+    },
+    {
+      "minServerVersion": "4.2",
       "topologies": [
         "replicaset",
-        "sharded-replicaset"
+        "sharded"
       ]
     }
   ],
@@ -21,7 +27,7 @@
       "client": {
         "id": "client",
         "uriOptions": {
-          "timeoutMS": 50
+          "timeoutMS": 10
         },
         "useMultipleMongoses": false,
         "observeEvents": [
@@ -42,12 +48,6 @@
         "database": "database",
         "collectionName": "coll"
       }
-    },
-    {
-      "session": {
-        "id": "session",
-        "client": "client"
-      }
     }
   ],
   "initialData": [
@@ -59,40 +59,7 @@
   ],
   "tests": [
     {
-      "description": "withTransaction raises a client-side error if timeoutMS is overriden inside the callback",
-      "operations": [
-        {
-          "name": "withTransaction",
-          "object": "session",
-          "arguments": {
-            "callback": [
-              {
-                "name": "insertOne",
-                "object": "collection",
-                "arguments": {
-                  "document": {
-                    "_id": 1
-                  },
-                  "session": "session",
-                  "timeoutMS": 100
-                },
-                "expectError": {
-                  "isClientError": true
-                }
-              }
-            ]
-          }
-        }
-      ],
-      "expectEvents": [
-        {
-          "client": "client",
-          "events": []
-        }
-      ]
-    },
-    {
-      "description": "timeoutMS is not refreshed for each operation in the callback",
+      "description": "basic MaxTimeMSExpired error is transformed",
       "operations": [
         {
           "name": "failPoint",
@@ -102,47 +69,24 @@
             "failPoint": {
               "configureFailPoint": "failCommand",
               "mode": {
-                "times": 2
+                "times": 1
               },
               "data": {
                 "failCommands": [
                   "insert"
                 ],
-                "blockConnection": true,
-                "blockTimeMS": 30
+                "errorCode": 50
               }
             }
           }
         },
         {
-          "name": "withTransaction",
-          "object": "session",
+          "name": "insertOne",
+          "object": "collection",
           "arguments": {
-            "callback": [
-              {
-                "name": "insertOne",
-                "object": "collection",
-                "arguments": {
-                  "document": {
-                    "_id": 1
-                  },
-                  "session": "session"
-                }
-              },
-              {
-                "name": "insertOne",
-                "object": "collection",
-                "arguments": {
-                  "document": {
-                    "_id": 2
-                  },
-                  "session": "session"
-                },
-                "expectError": {
-                  "isTimeoutError": true
-                }
-              }
-            ]
+            "document": {
+              "_id": 1
+            }
           },
           "expectError": {
             "isTimeoutError": true
@@ -167,7 +111,53 @@
                   }
                 }
               }
-            },
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "description": "write concern error MaxTimeMSExpired is transformed",
+      "operations": [
+        {
+          "name": "failPoint",
+          "object": "testRunner",
+          "arguments": {
+            "client": "failPointClient",
+            "failPoint": {
+              "configureFailPoint": "failCommand",
+              "mode": {
+                "times": 1
+              },
+              "data": {
+                "failCommands": [
+                  "insert"
+                ],
+                "writeConcernError": {
+                  "code": 50,
+                  "errmsg": "maxTimeMS expired"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "insertOne",
+          "object": "collection",
+          "arguments": {
+            "document": {
+              "_id": 1
+            }
+          },
+          "expectError": {
+            "isTimeoutError": true
+          }
+        }
+      ],
+      "expectEvents": [
+        {
+          "client": "client",
+          "events": [
             {
               "commandStartedEvent": {
                 "commandName": "insert",

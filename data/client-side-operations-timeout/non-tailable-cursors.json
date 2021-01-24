@@ -22,6 +22,9 @@
         "useMultipleMongoses": false,
         "observeEvents": [
           "commandStartedEvent"
+        ],
+        "ignoreCommandMonitoringEvents": [
+          "killCursors"
         ]
       }
     },
@@ -194,24 +197,6 @@
                   }
                 }
               }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "killCursors",
-                "databaseName": "test",
-                "command": {
-                  "killCursors": "coll",
-                  "cursors": {
-                    "$$type": "array"
-                  },
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
             }
           ]
         }
@@ -288,24 +273,6 @@
                   "collection": "coll",
                   "maxTimeMS": {
                     "$$exists": false
-                  }
-                }
-              }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "killCursors",
-                "databaseName": "test",
-                "command": {
-                  "killCursors": "coll",
-                  "cursors": {
-                    "$$type": "array"
-                  },
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
                   }
                 }
               }
@@ -511,24 +478,6 @@
                   }
                 }
               }
-            },
-            {
-              "commandStartedEvent": {
-                "commandName": "killCursors",
-                "databaseName": "test",
-                "command": {
-                  "killCursors": "coll",
-                  "cursors": {
-                    "$$type": "array"
-                  },
-                  "maxTimeMS": {
-                    "$$type": [
-                      "int",
-                      "long"
-                    ]
-                  }
-                }
-              }
             }
           ]
         }
@@ -545,7 +494,8 @@
               {
                 "$out": "aggregateOutputColl"
               }
-            ]
+            ],
+            "timeoutMS": 100
           }
         }
       ],
@@ -583,7 +533,8 @@
               {
                 "$merge": "aggregateOutputColl"
               }
-            ]
+            ],
+            "timeoutMS": 100
           }
         }
       ],

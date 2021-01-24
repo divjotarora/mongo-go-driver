@@ -21,7 +21,7 @@
       "client": {
         "id": "client",
         "uriOptions": {
-          "socketTimeoutMS": 10
+          "socketTimeoutMS": 50
         },
         "useMultipleMongoses": false,
         "observeEvents": [
@@ -73,7 +73,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -132,7 +132,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -194,7 +194,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -255,7 +255,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -319,7 +319,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -376,7 +376,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -436,7 +436,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -496,7 +496,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -559,7 +559,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -621,7 +621,7 @@
                   "update"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -686,7 +686,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -743,7 +743,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -803,7 +803,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -863,7 +863,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -926,7 +926,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -988,7 +988,7 @@
                   "findAndModify"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1053,7 +1053,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1118,7 +1118,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1186,7 +1186,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1243,7 +1243,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1303,7 +1303,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1360,7 +1360,7 @@
                   "listDatabases"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1420,7 +1420,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1477,7 +1477,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1537,7 +1537,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1601,7 +1601,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1668,7 +1668,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1725,7 +1725,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1785,7 +1785,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1842,7 +1842,7 @@
                   "listCollections"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1902,7 +1902,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -1959,7 +1959,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2019,7 +2019,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2076,7 +2076,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2136,7 +2136,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2193,7 +2193,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2253,7 +2253,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2310,7 +2310,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2370,7 +2370,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2424,7 +2424,7 @@
                   "count"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2481,7 +2481,7 @@
                   "distinct"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2539,7 +2539,7 @@
                   "distinct"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2600,7 +2600,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2657,7 +2657,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2717,7 +2717,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2774,7 +2774,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2834,7 +2834,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2888,7 +2888,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -2945,7 +2945,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }
@@ -3002,7 +3002,7 @@
                   "aggregate"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 55
               }
             }
           }

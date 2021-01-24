@@ -7,6 +7,7 @@ schemaVersion: "1.2"
 # min server version is set to 4.2 for all.
 runOnRequirements:
   - minServerVersion: "4.2"
+    topologies: ["replicaset", "sharded-replicaset"]
 
 createEntities:
   - client:
@@ -29,7 +30,7 @@ tests:
   # command sent to the server does not contain a writeConcern field.
   #
   # 3. If the operation supports maxTimeMS, it ignores maxTimeMS if timeoutMS is set. The test executes the operation
-  # with timeoutMS=100 and maxTimeMS=500. It expects the operation to succeed and uses command monitoring expectations
+  # with timeoutMS=1000 and maxTimeMS=5000. It expects the operation to succeed and uses command monitoring expectations
   # to assert that the actual maxTimeMS value sent was less than or equal to 100, thereby asserting that it was
   # actually derived from timeoutMS.
 
@@ -46,8 +47,13 @@ tests:
             - client:
                 id: &client client
                 uriOptions:
-                  socketTimeoutMS: 1
+                  # This test uses 20 instead of 1 like other tests because socketTimeoutMS also applies to the
+                  # operation done to start the server-side transaction and it needs time to succeed.
+                  socketTimeoutMS: 20
                 useMultipleMongoses: false
+                observeEvents:
+                  - commandStartedEvent
+                ignoreCommandMonitoringEvents: ["aggregate"]
             - database:
                 id: &database database
                 client: *client
@@ -72,15 +78,25 @@ tests:
               blockTimeMS: 5
       - name: startTransaction
         object: *session
-      - name: insertOne
+      - name: countDocuments
         object: *collection
         arguments:
-          document: { _id: 1 }
+          filter: {}
           session: *session
       - name: commitTransaction
         object: *session
         arguments:
           timeoutMS: 10000
+    expectEvents:
+      - client: *client
+        events:
+          - commandStartedEvent:
+              commandName: commitTransaction
+              databaseName: admin
+              command:
+                commitTransaction: 1
+                writeConcern: { $$exists: false }
+                maxTimeMS: { $$type: ["int", "long"] }
 
   - description: "commitTransaction ignores wTimeoutMS if timeoutMS is set"
     operations:
@@ -94,7 +110,7 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
-                ignoreCommandMonitoringEvents: ["insert"]
+                ignoreCommandMonitoringEvents: ["aggregate"]
             - database:
                 id: &database database
                 client: *client
@@ -108,10 +124,10 @@ tests:
                 client: *client
       - name: startTransaction
         object: *session
-      - name: insertOne
+      - name: countDocuments
         object: *collection
         arguments:
-          document: { _id: 1 }
+          filter: {}
           session: *session
       - name: commitTransaction
         object: *session
@@ -139,7 +155,7 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
-                ignoreCommandMonitoringEvents: ["insert"]
+                ignoreCommandMonitoringEvents: ["aggregate"]
             - database:
                 id: &database database
                 client: *client
@@ -153,30 +169,18 @@ tests:
                 client: *client
                 sessionOptions:
                   defaultTransactionOptions:
-                    maxCommitTimeMS: 1
-      - name: failPoint
-        object: testRunner
-        arguments:
-          client: *failPointClient
-          arguments:
-            failPoint:
-              configureFailPoint: failCommand
-              mode: { times: 1 }
-              data:
-                failCommands: ["commitTransaction"]
-                blockConnection: true
-                blockTimeMS: 5
+                    maxCommitTimeMS: 5000
       - name: startTransaction
         object: *session
-      - name: insertOne
+      - name: countDocuments
         object: *collection
         arguments:
-          document: { _id: 1 }
+          filter: {}
           session: *session
       - name: commitTransaction
         object: *session
         arguments:
-          timeoutMS: 10000
+          timeoutMS: &timeoutMS 1000
     expectEvents:
       - client: *client
         events:
@@ -185,7 +189,8 @@ tests:
               databaseName: admin
               command:
                 commitTransaction: 1
-                maxTimeMS: { $$type: ["int", "long"] }
+                # Assert that the final maxTimeMS field is derived from timeoutMS, not maxCommitTimeMS.
+                maxTimeMS: { $$lte: *timeoutMS }
   
   # Tests for abortTransaction. These are not included in the operations loop because the tests need to execute
   # additional "startTransaction" and "insertOne" operations to establish a server-side transaction.
@@ -199,8 +204,13 @@ tests:
             - client:
                 id: &client client
                 uriOptions:
-                  socketTimeoutMS: 1
+                  # This test uses 20 instead of 1 like other tests because socketTimeoutMS also applies to the
+                  # operation done to start the server-side transaction and it needs time to succeed.
+                  socketTimeoutMS: 20
                 useMultipleMongoses: false
+                observeEvents:
+                  - commandStartedEvent
+                ignoreCommandMonitoringEvents: ["aggregate"]
             - database:
                 id: &database database
                 client: *client
@@ -225,15 +235,25 @@ tests:
               blockTimeMS: 5
       - name: startTransaction
         object: *session
-      - name: insertOne
+      - name: countDocuments
         object: *collection
         arguments:
-          document: { _id: 1 }
+          filter: {}
           session: *session
       - name: abortTransaction
         object: *session
         arguments:
           timeoutMS: 10000
+    expectEvents:
+      - client: *client
+        events:
+          - commandStartedEvent:
+              commandName: abortTransaction
+              databaseName: admin
+              command:
+                abortTransaction: 1
+                writeConcern: { $$exists: false }
+                maxTimeMS: { $$type: ["int", "long"] }
 
   - description: "abortTransaction ignores wTimeoutMS if timeoutMS is set"
     operations:
@@ -247,7 +267,7 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
-                ignoreCommandMonitoringEvents: ["insert"]
+                ignoreCommandMonitoringEvents: ["aggregate"]
             - database:
                 id: &database database
                 client: *client
@@ -261,10 +281,10 @@ tests:
                 client: *client
       - name: startTransaction
         object: *session
-      - name: insertOne
+      - name: countDocuments
         object: *collection
         arguments:
-          document: { _id: 1 }
+          filter: {}
           session: *session
       - name: abortTransaction
         object: *session
@@ -274,10 +294,10 @@ tests:
       - client: *client
         events:
           - commandStartedEvent:
-              commandName: commitTransaction
+              commandName: abortTransaction
               databaseName: admin
               command:
-                commitTransaction: 1
+                abortTransaction: 1
                 writeConcern: { $$exists: false }
                 maxTimeMS: { $$type: ["int", "long"] }
 
@@ -294,8 +314,12 @@ tests:
             - client:
                 id: &client client
                 uriOptions:
-                  socketTimeoutMS: 1
+                  # This test uses 20 instead of 1 like other tests because socketTimeoutMS also applies to the
+                  # operation done to start the server-side transaction and it needs time to succeed.
+                  socketTimeoutMS: 20
                 useMultipleMongoses: false
+                observeEvents:
+                  - commandStartedEvent
             - database:
                 id: &database database
                 client: *client
@@ -323,11 +347,27 @@ tests:
         arguments:
           timeoutMS: 10000
           callback:
-            - name: insertOne
+            - name: countDocuments
               object: *collection
               arguments:
-                document: { _id: 1 }
+                filter: {}
                 session: *session
+    expectEvents:
+      - client: *client
+        events:
+          - commandStartedEvent:
+              commandName: aggregate
+              databaseName: *databaseName
+              command:
+                aggregate: *collectionName
+                maxTimeMS: { $$type: ["int", "long"] }
+          - commandStartedEvent:
+              commandName: commitTransaction
+              databaseName: admin
+              command:
+                commitTransaction: 1
+                writeConcern: { $$exists: false }
+                maxTimeMS: { $$type: ["int", "long"] }
 
   - description: "withTransaction ignores wTimeoutMS if timeoutMS is set"
     operations:
@@ -357,19 +397,19 @@ tests:
         arguments:
           timeoutMS: 10000
           callback:
-            - name: insertOne
+            - name: countDocuments
               object: *collection
               arguments:
-                document: { _id: 1 }
+                filter: {}
                 session: *session
     expectEvents:
       - client: *client
         events:
           - commandStartedEvent:
-              commandName: insert
+              commandName: aggregate
               databaseName: *databaseName
               command:
-                insert: *collectionName
+                aggregate: *collectionName
                 writeConcern: { $$exists: false }
                 maxTimeMS: { $$type: ["int", "long"] }
           - commandStartedEvent:
@@ -391,7 +431,6 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
-                ignoreCommandMonitoringEvents: ["insert"]
             - database:
                 id: &database database
                 client: *client
@@ -405,38 +444,34 @@ tests:
                 client: *client
                 sessionOptions:
                   defaultTransactionOptions:
-                    maxCommitTimeMS: 1
-      - name: failPoint
-        object: testRunner
-        arguments:
-          client: *failPointClient
-          arguments:
-            failPoint:
-              configureFailPoint: failCommand
-              mode: { times: 1 }
-              data:
-                failCommands: ["commitTransaction"]
-                blockConnection: true
-                blockTimeMS: 5
+                    maxCommitTimeMS: 5000
       - name: withTransaction
         object: *session
         arguments:
-          timeoutMS: 10000
+          timeoutMS: &timeoutMS 1000
           callback:
-            - name: insertOne
+            - name: countDocuments
               object: *collection
               arguments:
-                document: { _id: 1 }
+                filter: {}
                 session: *session
     expectEvents:
       - client: *client
         events:
           - commandStartedEvent:
+              commandName: aggregate
+              databaseName: *databaseName
+              command:
+                aggregate: *collectionName
+                writeConcern: { $$exists: false }
+                maxTimeMS: { $$type: ["int", "long"] }
+          - commandStartedEvent:
               commandName: commitTransaction
               databaseName: admin
               command:
                 commitTransaction: 1
-                maxTimeMS: { $$type: ["int", "long"] }
+                # Assert that the final maxTimeMS field is derived from timeoutMS, not maxCommitTimeMS.
+                maxTimeMS: { $$lte: *timeoutMS }
 
   # Tests for operations that can be generated.
 
@@ -483,6 +518,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listDatabases on client"
     operations:
@@ -496,6 +532,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -516,6 +554,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -570,6 +609,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listDatabaseNames on client"
     operations:
@@ -583,6 +623,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -603,6 +645,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -657,6 +700,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - createChangeStream on client"
     operations:
@@ -670,6 +714,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -690,6 +736,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
     expectEvents:
       - client: *client
         events:
@@ -744,6 +791,7 @@ tests:
           timeoutMS: 100000
           pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - aggregate on database"
     operations:
@@ -757,6 +805,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -777,6 +827,7 @@ tests:
           timeoutMS: 100000
           pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
           
+        
     expectEvents:
       - client: *client
         events:
@@ -799,6 +850,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -816,10 +869,11 @@ tests:
       - name: aggregate
         object: *database
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           pipeline: [ { $listLocalSessions: {} }, { $limit: 1 } ]
           
+        
     expectEvents:
       - client: *client
         events:
@@ -828,7 +882,7 @@ tests:
               databaseName: *databaseName
               command:
                 aggregate: 1
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - listCollections on database"
     operations:
@@ -872,6 +926,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listCollections on database"
     operations:
@@ -885,6 +940,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -905,6 +962,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -959,6 +1017,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listCollectionNames on database"
     operations:
@@ -972,6 +1031,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -992,6 +1053,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1046,6 +1108,7 @@ tests:
           timeoutMS: 100000
           command: { ping: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - runCommand on database"
     operations:
@@ -1059,6 +1122,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1079,6 +1144,7 @@ tests:
           timeoutMS: 100000
           command: { ping: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1133,6 +1199,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - createChangeStream on database"
     operations:
@@ -1146,6 +1213,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1166,6 +1235,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1220,6 +1290,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - aggregate on collection"
     operations:
@@ -1233,6 +1304,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1253,6 +1326,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1275,6 +1349,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1292,10 +1368,11 @@ tests:
       - name: aggregate
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           pipeline: []
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1304,7 +1381,7 @@ tests:
               databaseName: *databaseName
               command:
                 aggregate: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - count on collection"
     operations:
@@ -1348,6 +1425,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - count on collection"
     operations:
@@ -1361,6 +1439,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1381,6 +1461,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1403,6 +1484,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1420,10 +1503,11 @@ tests:
       - name: count
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1432,7 +1516,7 @@ tests:
               databaseName: *databaseName
               command:
                 count: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - countDocuments on collection"
     operations:
@@ -1476,6 +1560,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - countDocuments on collection"
     operations:
@@ -1489,6 +1574,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1509,6 +1596,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1562,6 +1650,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - estimatedDocumentCount on collection"
     operations:
@@ -1575,6 +1664,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1594,6 +1685,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1616,6 +1708,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1633,9 +1727,10 @@ tests:
       - name: estimatedDocumentCount
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1644,7 +1739,7 @@ tests:
               databaseName: *databaseName
               command:
                 count: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - distinct on collection"
     operations:
@@ -1689,6 +1784,7 @@ tests:
           fieldName: x
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - distinct on collection"
     operations:
@@ -1702,6 +1798,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1723,6 +1821,7 @@ tests:
           fieldName: x
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1745,6 +1844,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1762,11 +1863,12 @@ tests:
       - name: distinct
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           fieldName: x
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1775,7 +1877,7 @@ tests:
               databaseName: *databaseName
               command:
                 distinct: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - find on collection"
     operations:
@@ -1819,6 +1921,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - find on collection"
     operations:
@@ -1832,6 +1935,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1852,6 +1957,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1874,6 +1980,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1891,10 +1999,11 @@ tests:
       - name: find
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -1903,7 +2012,7 @@ tests:
               databaseName: *databaseName
               command:
                 find: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - findOne on collection"
     operations:
@@ -1947,6 +2056,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - findOne on collection"
     operations:
@@ -1960,6 +2070,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -1980,6 +2092,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2002,6 +2115,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2019,10 +2134,11 @@ tests:
       - name: findOne
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2031,7 +2147,7 @@ tests:
               databaseName: *databaseName
               command:
                 find: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - listIndexes on collection"
     operations:
@@ -2074,6 +2190,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listIndexes on collection"
     operations:
@@ -2087,6 +2204,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2106,6 +2225,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2159,6 +2279,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - listIndexNames on collection"
     operations:
@@ -2172,6 +2293,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2191,6 +2314,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2245,6 +2369,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - createChangeStream on collection"
     operations:
@@ -2258,6 +2383,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2278,6 +2405,7 @@ tests:
           timeoutMS: 100000
           pipeline: []
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2332,6 +2460,7 @@ tests:
           timeoutMS: 100000
           document: { x: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - insertOne on collection"
     operations:
@@ -2345,6 +2474,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2365,6 +2496,7 @@ tests:
           timeoutMS: 100000
           document: { x: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2420,6 +2552,7 @@ tests:
           documents:
             - { x: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - insertMany on collection"
     operations:
@@ -2433,6 +2566,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2454,6 +2589,7 @@ tests:
           documents:
             - { x: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2508,6 +2644,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - deleteOne on collection"
     operations:
@@ -2521,6 +2658,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2541,6 +2680,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2595,6 +2735,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - deleteMany on collection"
     operations:
@@ -2608,6 +2749,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2628,6 +2771,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2683,6 +2827,7 @@ tests:
           filter: {}
           replacement: { x: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - replaceOne on collection"
     operations:
@@ -2696,6 +2841,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2717,6 +2864,7 @@ tests:
           filter: {}
           replacement: { x: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2772,6 +2920,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - updateOne on collection"
     operations:
@@ -2785,6 +2934,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2806,6 +2957,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2861,6 +3013,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - updateMany on collection"
     operations:
@@ -2874,6 +3027,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2895,6 +3050,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -2949,6 +3105,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - findOneAndDelete on collection"
     operations:
@@ -2962,6 +3119,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -2982,6 +3141,7 @@ tests:
           timeoutMS: 100000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3004,6 +3164,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3021,10 +3183,11 @@ tests:
       - name: findOneAndDelete
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3033,7 +3196,7 @@ tests:
               databaseName: *databaseName
               command:
                 findAndModify: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - findOneAndReplace on collection"
     operations:
@@ -3078,6 +3241,7 @@ tests:
           filter: {}
           replacement: { x: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - findOneAndReplace on collection"
     operations:
@@ -3091,6 +3255,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3112,6 +3278,7 @@ tests:
           filter: {}
           replacement: { x: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3134,6 +3301,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3151,11 +3320,12 @@ tests:
       - name: findOneAndReplace
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           replacement: { x: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3164,7 +3334,7 @@ tests:
               databaseName: *databaseName
               command:
                 findAndModify: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - findOneAndUpdate on collection"
     operations:
@@ -3209,6 +3379,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - findOneAndUpdate on collection"
     operations:
@@ -3222,6 +3393,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3243,6 +3416,7 @@ tests:
           filter: {}
           update: { $set: { x: 1 } }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3265,6 +3439,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3282,11 +3458,12 @@ tests:
       - name: findOneAndUpdate
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           filter: {}
           update: { $set: { x: 1 } }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3295,7 +3472,7 @@ tests:
               databaseName: *databaseName
               command:
                 findAndModify: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - bulkWrite on collection"
     operations:
@@ -3341,6 +3518,7 @@ tests:
             - insertOne:
                 document: { _id: 1 }
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - bulkWrite on collection"
     operations:
@@ -3354,6 +3532,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3376,6 +3556,7 @@ tests:
             - insertOne:
                 document: { _id: 1 }
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3431,6 +3612,7 @@ tests:
           keys: { x: 1 }
           name: "x_1"
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - createIndex on collection"
     operations:
@@ -3444,6 +3626,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3465,6 +3649,7 @@ tests:
           keys: { x: 1 }
           name: "x_1"
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3487,6 +3672,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3504,11 +3691,12 @@ tests:
       - name: createIndex
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           keys: { x: 1 }
           name: "x_1"
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3517,7 +3705,7 @@ tests:
               databaseName: *databaseName
               command:
                 createIndexes: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - dropIndex on collection"
     operations:
@@ -3561,6 +3749,9 @@ tests:
           timeoutMS: 100000
           name: "x_1"
           
+        expectError:
+          isClientError: false
+          isTimeoutError: false
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - dropIndex on collection"
     operations:
@@ -3574,6 +3765,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3594,6 +3787,9 @@ tests:
           timeoutMS: 100000
           name: "x_1"
           
+        expectError:
+          isClientError: false
+          isTimeoutError: false
     expectEvents:
       - client: *client
         events:
@@ -3616,6 +3812,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3633,10 +3831,13 @@ tests:
       - name: dropIndex
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           name: "x_1"
           
+        expectError:
+          isClientError: false
+          isTimeoutError: false
     expectEvents:
       - client: *client
         events:
@@ -3645,7 +3846,7 @@ tests:
               databaseName: *databaseName
               command:
                 dropIndexes: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   
   - description: "socketTimeoutMS is ignored if timeoutMS is set - dropIndexes on collection"
     operations:
@@ -3688,6 +3889,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
 
   - description: "wTimeoutMS is ignored if timeoutMS is set - dropIndexes on collection"
     operations:
@@ -3701,6 +3903,8 @@ tests:
                   wTimeoutMS: 1
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3720,6 +3924,7 @@ tests:
         arguments:
           timeoutMS: 100000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3742,6 +3947,8 @@ tests:
                 useMultipleMongoses: false
                 observeEvents:
                   - commandStartedEvent
+                ignoreCommandMonitoringEvents:
+                  - killCursors
             - database:
                 id: &database database
                 client: *client
@@ -3759,9 +3966,10 @@ tests:
       - name: dropIndexes
         object: *collection
         arguments:
-          timeoutMS: &timeoutMS 100
-          maxTimeMS: 500
+          timeoutMS: &timeoutMS 1000
+          maxTimeMS: 5000
           
+        
     expectEvents:
       - client: *client
         events:
@@ -3770,5 +3978,5 @@ tests:
               databaseName: *databaseName
               command:
                 dropIndexes: *collectionName
-                maxTimeMS: { $lte: 1 }
+                maxTimeMS: { $$lte: *timeoutMS }
   

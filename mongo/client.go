@@ -891,15 +891,12 @@ func getOperationContext(ctx context.Context, client *Client, timeout, maxTime, 
 
 	_, ctxHasDeadline := ctx.Deadline()
 	if timeout == nil && !ctxHasDeadline {
+		// timeoutMS not set as a code option and is not overridden for a specific operation via a ctx deadline
 		return ctx, nil, nil
-	}
-
-	if (client != nil && client.legacyTimeoutUsed) || maxTime != nil || maxCommitTime != nil {
-		return ctx, nil, errTimeoutConflict
 	}
 
 	if ctxHasDeadline {
-		return ctx, nil, nil
+		return internal.WrapTimeoutMSContext(ctx), nil, nil
 	}
 
 	if *timeout == 0 {

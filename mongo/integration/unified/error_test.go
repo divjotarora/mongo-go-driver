@@ -67,7 +67,7 @@ func VerifyOperationError(ctx context.Context, expected *ExpectedError, result *
 		}
 	}
 	if expected.IsTimeoutError != nil {
-		isTimeoutError := errors.Is(result.Err, context.DeadlineExceeded)
+		isTimeoutError := isTimeoutError(result.Err)
 		if *expected.IsTimeoutError != isTimeoutError {
 			return fmt.Errorf("expected error %v to be a timeout: %v, is timeout: %v", result.Err,
 				*expected.IsTimeoutError, isTimeoutError)
@@ -181,5 +181,23 @@ func stringSliceContains(arr []string, target string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+func isTimeoutError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	var ce mongo.CommandError
+	if errors.As(err, &ce) {
+		return ce.Code == 50
+	}
+
+	var we mongo.WriteException
+	if errors.As(err, &we) {
+		return we.WriteConcernError != nil && we.WriteConcernError.Code == 50
+	}
+
 	return false
 }

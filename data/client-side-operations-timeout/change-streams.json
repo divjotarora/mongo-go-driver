@@ -20,9 +20,6 @@
     {
       "client": {
         "id": "client",
-        "uriOptions": {
-          "timeoutMS": 10
-        },
         "useMultipleMongoses": false,
         "observeEvents": [
           "commandStartedEvent"
@@ -116,7 +113,8 @@
           "name": "createChangeStream",
           "object": "collection",
           "arguments": {
-            "pipeline": []
+            "pipeline": [],
+            "timeoutMS": 10
           },
           "expectError": {
             "isTimeoutError": true
@@ -413,7 +411,8 @@
           "object": "collection",
           "arguments": {
             "pipeline": [],
-            "maxAwaitTimeMS": 1
+            "maxAwaitTimeMS": 1,
+            "timeoutMS": 100
           },
           "saveResultAsEntity": "changeStream"
         },
@@ -432,7 +431,7 @@
                   "getMore"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 150
               }
             }
           }
@@ -544,7 +543,8 @@
           "name": "createChangeStream",
           "object": "collection",
           "arguments": {
-            "pipeline": []
+            "pipeline": [],
+            "timeoutMS": 10
           },
           "saveResultAsEntity": "changeStream"
         },
