@@ -625,8 +625,8 @@ func (c *Client) configure(opts *options.ClientOptions) error {
 	// Deployment
 	if opts.Deployment != nil {
 		// topology options: WithSeedlist and WithURI
-		// server options: WithClock and WithConnectionOptions
-		if len(serverOpts) > 2 || len(topologyOpts) > 2 {
+		// server options: WithClock, WithHeartbeatTimeout, and WithConnectionOptions
+		if len(serverOpts) > 3 || len(topologyOpts) > 2 {
 			return errors.New("cannot specify topology or server options with a deployment")
 		}
 		c.deployment = opts.Deployment

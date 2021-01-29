@@ -106,6 +106,9 @@ func createClientOptions(t testing.TB, opts bson.Raw) *options.ClientOptions {
 		case "serverSelectionTimeoutMS":
 			sst := convertValueToMilliseconds(t, opt)
 			clientOpts.SetServerSelectionTimeout(sst)
+		case "socketTimeoutMS":
+			stms := convertValueToMilliseconds(t, opt)
+			clientOpts.SetSocketTimeout(stms)
 		case "timeoutMS":
 			timeout := convertValueToMilliseconds(t, opt)
 			clientOpts.SetTimeout(timeout)

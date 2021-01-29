@@ -14,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/x/mongo/driver"
 )
 
 // ExpectedError represents an error that is expected to occur during a test. This type ignores the "isError" field in
@@ -187,6 +188,12 @@ func stringSliceContains(arr []string, target string) bool {
 func isTimeoutError(err error) bool {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return true
+	}
+
+	// TODO: remove after rebasing on master
+	var de driver.Error
+	if errors.As(err, &de) {
+		return de.Code == 50
 	}
 
 	var ce mongo.CommandError

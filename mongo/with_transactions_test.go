@@ -119,7 +119,10 @@ func TestConvenientTransactions(t *testing.T) {
 				{"mode", "alwaysOn"},
 				{"data", bson.D{
 					{"failCommands", bson.A{"commitTransaction"}},
-					{"closeConnection", true},
+					{"writeConcernError", bson.D{
+						{"errorCode", 50},
+					}},
+					// {"closeConnection", true},
 				}},
 			}
 			err = dbAdmin.RunCommand(bgCtx, failpoint).Err()

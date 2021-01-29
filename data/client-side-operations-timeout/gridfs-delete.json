@@ -17,7 +17,7 @@
       "client": {
         "id": "client",
         "uriOptions": {
-          "timeoutMS": 20
+          "timeoutMS": 50
         },
         "useMultipleMongoses": false,
         "observeEvents": [
@@ -116,7 +116,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -128,7 +128,7 @@
             "id": {
               "$oid": "000000000000000000000005"
             },
-            "timeoutMS": 50
+            "timeoutMS": 100
           }
         }
       ]
@@ -151,7 +151,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -210,7 +210,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -247,7 +247,7 @@
                   "delete"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 30
               }
             }
           }

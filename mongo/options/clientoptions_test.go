@@ -500,16 +500,18 @@ func TestClientOptions(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				result := Client().ApplyURI(tc.uri)
 
-				// Manually add the URI and ConnString to the test expectations to avoid adding them in each test
-				// definition. The ConnString should only be recorded if there was no error while parsing.
-				tc.result.uri = tc.uri
+				// Merge the expected result with an empty Client() to ensure any defaults are correctly set
+				// (e.g. ConnectTimeout). Also, manually add the URI and ConnString. Doing all of this allows us to
+				// avoid specifying each of these in each test definition.
+				fixedResult := MergeClientOptions(Client(), tc.result)
+				fixedResult.uri = tc.uri
 				cs, err := connstring.ParseAndValidate(tc.uri)
 				if err == nil {
-					tc.result.cs = &cs
+					fixedResult.cs = &cs
 				}
 
 				if diff := cmp.Diff(
-					tc.result, result,
+					fixedResult, result,
 					cmp.AllowUnexported(ClientOptions{}, readconcern.ReadConcern{}, writeconcern.WriteConcern{}, readpref.ReadPref{}),
 					cmp.Comparer(func(r1, r2 *bsoncodec.Registry) bool { return r1 == r2 }),
 					cmp.Comparer(compareTLSConfig),

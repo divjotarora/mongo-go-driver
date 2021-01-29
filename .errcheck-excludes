@@ -10,6 +10,7 @@
 (*go.mongodb.org/mongo-driver/mongo.Cursor).Close
 (*go.mongodb.org/mongo-driver/mongo.ChangeStream).Close
 (*go.mongodb.org/mongo-driver/mongo.Client).Disconnect
+(go.mongodb.org/mongo-driver/mongo/integration/unified.Iterator).Close
 (net.Conn).Close
 encoding/pem.Encode
 fmt.Fprintf

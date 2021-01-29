@@ -192,17 +192,18 @@ func TestChangeStream_ReplicaSet(t *testing.T) {
 		// getMore response: resumable error
 		// killCursors response: success
 		// resumed aggregate response: resumable error
+		var errorCode int32 = 100 // The code doesn't matter because resumability is determined based on labels.
 		ns := mt.Coll.Database().Name() + "." + mt.Coll.Name()
 		aggRes := mtest.CreateCursorResponse(1, ns, mtest.FirstBatch)
 		getMoreRes := mtest.CreateCommandErrorResponse(mtest.CommandError{
-			Code:    errorHostUnreachable,
+			Code:    errorCode,
 			Name:    "foo",
 			Message: "bar",
 			Labels:  []string{resumableChangeStreamError},
 		})
 		killCursorsRes := mtest.CreateSuccessResponse()
 		resumedAggRes := mtest.CreateCommandErrorResponse(mtest.CommandError{
-			Code:    errorHostUnreachable,
+			Code:    errorCode,
 			Name:    "foo",
 			Message: "bar",
 			Labels:  []string{resumableChangeStreamError},
@@ -236,6 +237,7 @@ func TestChangeStream_ReplicaSet(t *testing.T) {
 			Code:    errorHostUnreachable,
 			Name:    "foo",
 			Message: "bar",
+			Labels:  []string{resumableChangeStreamError},
 		})
 		killCursorsRes := mtest.CreateCommandErrorResponse(mtest.CommandError{
 			Code:    errorInterrupted,
@@ -250,7 +252,7 @@ func TestChangeStream_ReplicaSet(t *testing.T) {
 		assert.Nil(mt, err, "Watch error: %v", err)
 		defer closeStream(cs)
 
-		assert.True(mt, cs.Next(mtest.Background), "expected Next to return true, got false")
+		assert.True(mt, cs.Next(mtest.Background), "expected Next to return true, got false; stream error: %v", cs.Err())
 		assert.Nil(mt, cs.Err(), "change stream error: %v", cs.Err())
 	})
 
@@ -481,12 +483,7 @@ func TestChangeStream_ReplicaSet(t *testing.T) {
 			defer closeStream(cs)
 
 			mt.ClearEvents()
-			// first call to TryNext should return false because first batch was empty so batch cursor returns false
-			// without doing a getMore
-			// next call to TryNext should attempt a getMore
-			for i := 0; i < 2; i++ {
-				assert.False(mt, cs.TryNext(mtest.Background), "TryNext returned true on iteration %v", i)
-			}
+			assert.False(mt, cs.TryNext(mtest.Background), "unexpected change stream event: %v", cs.Current)
 			verifyOneGetmoreSent(mt, cs)
 		})
 		mt.RunOpts("getMore error", mtest.NewOptions().ClientType(mtest.Mock), func(mt *mtest.T) {
@@ -573,8 +570,10 @@ func TestChangeStream_ReplicaSet(t *testing.T) {
 				},
 			})
 
-			_, err := mt.Coll.Watch(mtest.Background, mongo.Pipeline{})
-			assert.NotNil(mt, err, "expected Watch error, got nil")
+			// Watch should succeed despite the fail point because operations are retried indefinitely.
+			cs, err := mt.Coll.Watch(mtest.Background, mongo.Pipeline{})
+			assert.Nil(mt, err, "Watch error: %v", err)
+			defer closeStream(cs)
 
 			var numClearedEvents int
 			for len(poolChan) > 0 {

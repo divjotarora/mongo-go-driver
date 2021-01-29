@@ -50,7 +50,7 @@ func TestOperation(t *testing.T) {
 	t.Run("selectServer", func(t *testing.T) {
 		t.Run("returns validation error", func(t *testing.T) {
 			op := &Operation{}
-			_, err := op.selectServer(context.Background())
+			_, _, err := op.selectServer(context.Background())
 			if err == nil {
 				t.Error("Expected a validation error from selectServer, but got <nil>")
 			}
@@ -59,12 +59,13 @@ func TestOperation(t *testing.T) {
 			want := new(mockServerSelector)
 			d := new(mockDeployment)
 			op := &Operation{
-				CommandFn:  func([]byte, description.SelectedServer) ([]byte, error) { return nil, nil },
-				Deployment: d,
-				Database:   "testing",
-				Selector:   want,
+				CommandName: "insert",
+				CommandFn:   func([]byte, description.SelectedServer) ([]byte, error) { return nil, nil },
+				Deployment:  d,
+				Database:    "testing",
+				Selector:    want,
 			}
-			_, err := op.selectServer(context.Background())
+			_, _, err := op.selectServer(context.Background())
 			noerr(t, err)
 			got := d.params.selector
 			if !cmp.Equal(got, want) {
@@ -74,11 +75,12 @@ func TestOperation(t *testing.T) {
 		t.Run("uses a default server selector", func(t *testing.T) {
 			d := new(mockDeployment)
 			op := &Operation{
-				CommandFn:  func([]byte, description.SelectedServer) ([]byte, error) { return nil, nil },
-				Deployment: d,
-				Database:   "testing",
+				CommandName: "insert",
+				CommandFn:   func([]byte, description.SelectedServer) ([]byte, error) { return nil, nil },
+				Deployment:  d,
+				Database:    "testing",
 			}
-			_, err := op.selectServer(context.Background())
+			_, _, err := op.selectServer(context.Background())
 			noerr(t, err)
 			if d.params.selector == nil {
 				t.Error("The selectServer method should use a default selector when not specified on Operation, but it passed <nil>.")
@@ -93,10 +95,11 @@ func TestOperation(t *testing.T) {
 			op   *Operation
 			err  error
 		}{
-			{"CommandFn", &Operation{}, InvalidOperationError{MissingField: "CommandFn"}},
-			{"Deployment", &Operation{CommandFn: cmdFn}, InvalidOperationError{MissingField: "Deployment"}},
-			{"Database", &Operation{CommandFn: cmdFn, Deployment: d}, InvalidOperationError{MissingField: "Database"}},
-			{"<nil>", &Operation{CommandFn: cmdFn, Deployment: d, Database: "test"}, nil},
+			{"CommandFn", &Operation{CommandName: "insert"}, InvalidOperationError{MissingField: "CommandFn"}},
+			{"Deployment", &Operation{CommandName: "insert", CommandFn: cmdFn}, InvalidOperationError{MissingField: "Deployment"}},
+			{"Database", &Operation{CommandName: "insert", CommandFn: cmdFn, Deployment: d}, InvalidOperationError{MissingField: "Database"}},
+			{"CommandName", &Operation{CommandFn: cmdFn, Deployment: d}, InvalidOperationError{MissingField: "CommandName"}},
+			{"<nil>", &Operation{CommandName: "insert", CommandFn: cmdFn, Deployment: d, Database: "test"}, nil},
 		}
 
 		for _, tc := range testCases {
@@ -235,7 +238,7 @@ func TestOperation(t *testing.T) {
 		want := bsoncore.AppendDocumentElement(nil, "writeConcern", bsoncore.BuildDocumentFromElements(
 			nil, bsoncore.AppendStringElement(nil, "w", "majority"),
 		))
-		got, err := Operation{WriteConcern: writeconcern.New(writeconcern.WMajority())}.addWriteConcern(nil, description.SelectedServer{})
+		got, err := Operation{WriteConcern: writeconcern.New(writeconcern.WMajority())}.addWriteConcern(context.TODO(), nil, description.SelectedServer{})
 		noerr(t, err)
 		if !bytes.Equal(got, want) {
 			t.Errorf("WriteConcern elements do not match. got %v; want %v", got, want)
@@ -501,7 +504,7 @@ func TestOperation(t *testing.T) {
 						Kind: tc.server,
 					},
 				}
-				wm, _, err := op.createQueryWireMessage(wm, desc)
+				wm, _, err := op.createQueryWireMessage(context.TODO(), wm, desc)
 				noerr(t, err)
 
 				// We know where the $query would be within the OP_QUERY, so we'll just index into there.
@@ -546,6 +549,7 @@ func TestOperation(t *testing.T) {
 			rCanStream: false,
 		}
 		op := Operation{
+			CommandName: "ismaster",
 			CommandFn: func(dst []byte, desc description.SelectedServer) ([]byte, error) {
 				return bsoncore.AppendInt32Element(dst, "isMaster", 1), nil
 			},

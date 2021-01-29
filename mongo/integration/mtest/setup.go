@@ -53,7 +53,11 @@ var testContext struct {
 
 func setupClient(cs connstring.ConnString, opts *options.ClientOptions) (*mongo.Client, error) {
 	wcMajority := writeconcern.New(writeconcern.WMajority())
-	return mongo.Connect(Background, opts.ApplyURI(cs.Original).SetWriteConcern(wcMajority))
+	clientOpts := options.Client().
+		ApplyURI(cs.Original).
+		SetWriteConcern(wcMajority).
+		SetHosts(cs.Hosts[:1]) // Pin to a single host so fail points always get set on the same mongos
+	return mongo.Connect(Background, clientOpts)
 }
 
 // Setup initializes the current testing context.

@@ -17,7 +17,7 @@
       "client": {
         "id": "client",
         "uriOptions": {
-          "timeoutMS": 20
+          "timeoutMS": 50
         },
         "useMultipleMongoses": false
       }
@@ -81,7 +81,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -117,7 +117,7 @@
                   "find"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -155,7 +155,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -193,7 +193,7 @@
                   "createIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -231,7 +231,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -269,7 +269,7 @@
                   "createIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -307,7 +307,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -345,7 +345,7 @@
                   "insert"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 25
+                "blockTimeMS": 55
               }
             }
           }
@@ -384,7 +384,7 @@
                   "listIndexes"
                 ],
                 "blockConnection": true,
-                "blockTimeMS": 15
+                "blockTimeMS": 30
               }
             }
           }

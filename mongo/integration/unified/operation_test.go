@@ -9,6 +9,7 @@ package unified
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -67,7 +68,14 @@ func (op *Operation) run(ctx context.Context) (*OperationResult, error) {
 			if err != nil {
 				return nil, fmt.Errorf("error cloning entity with timeout=0: %v", err)
 			}
-			defer cleanup(ctx)
+			defer func() {
+				if err := cleanup(ctx); err != nil {
+					// TODO: we might want to pass the actual mtest.T object down here and fail that way?
+					log.Panicf("test cleanup error: %v", err)
+				}
+			}()
+
+			// defer cleanup(ctx)
 		default:
 			var cancel context.CancelFunc
 			ctx, cancel = WithTimeoutMS(ctx, timeout)

@@ -24,7 +24,7 @@ const (
 	maxMessageSize        uint32 = 48000000
 	maxBatchCount         uint32 = 100000
 	sessionTimeoutMinutes uint32 = 30
-	maxWireVersion        int32  = 8
+	maxWireVersion        int32  = 9
 )
 
 // connection implements the driver.Connection interface and responds to wire messages with pre-configured responses.
